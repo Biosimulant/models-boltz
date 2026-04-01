@@ -1,0 +1,11 @@
+model:
+  repo: Biosimulant/models-boltz
+  manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
+  class: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
+  parameters:
+    use_msa_server: true
+    accelerator: gpu
+    output_format: mmcif
+  inputs:
+    protein_sequence: MKTAYIAKQRQISFVKSHFSRQ
+    ligand_smiles: CCO

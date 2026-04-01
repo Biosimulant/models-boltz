@@ -1,0 +1,3 @@
+models:
+  - models/boltz-boltz2-affinity-predictor/model.yaml
+spaces: []

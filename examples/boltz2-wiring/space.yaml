@@ -1,0 +1,26 @@
+schema_version: "2.0"
+title: "Boltz: Minimal Protein-Ligand Affinity Run"
+description: "Example wiring showing how the native Boltz-2 BioModule is referenced inside a BioSim space."
+models:
+  - repo: Biosimulant/models-boltz
+    alias: boltz2_affinity
+    manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
+    parameters:
+      use_msa_server: true
+      accelerator: gpu
+      output_format: mmcif
+runtime:
+  duration: 0.01
+  tick_dt: 0.01
+  initial_inputs: {}
+wiring: []
+scientific_context:
+  question: "Can a single native Boltz-2 wrapper be dropped into a BioSim composition and return structure plus affinity outputs without an ONNX conversion step?"
+  mode: "native-boltz"
+  assumptions:
+    - "The wrapper is run-once and caches its outputs after the first successful invocation."
+    - "Protein sequence and ligand SMILES are supplied by the caller outside this example space."
+  expected_observables:
+    - "Affinity summary JSON fields from Boltz."
+    - "Top-model confidence summary JSON fields from Boltz."
+    - "Absolute paths to generated structural artifacts."

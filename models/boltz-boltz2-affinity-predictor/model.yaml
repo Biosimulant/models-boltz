@@ -1,0 +1,12 @@
+schema_version: "2.0"
+title: "Boltz: Boltz2AffinityPredictor"
+description: "Wraps the native Boltz-2 CLI for single protein and single ligand affinity-focused structural runs."
+standard: other
+tags: [boltz, structural-biology, affinity, protein-ligand]
+authors: ["Biosimulant Team"]
+biosim:
+  entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
+runtime:
+  dependencies:
+    packages:
+      - pyyaml==6.0.2
