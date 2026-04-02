@@ -48,6 +48,10 @@ class Boltz2AffinityPredictor(BioModule):
 
     def __init__(
         self,
+        default_protein_sequence: Optional[str] = None,
+        default_ligand_smiles: Optional[str] = None,
+        default_msa_path: Optional[str] = None,
+        default_run_options: Optional[Mapping[str, Any]] = None,
         boltz_executable: str = "boltz",
         runtime_mode: str = "managed",
         runtime_dir: Optional[str] = None,
@@ -94,10 +98,10 @@ class Boltz2AffinityPredictor(BioModule):
             else (repo_root / ".runtime" / "boltz2").resolve()
         )
 
-        self._protein_sequence: Optional[str] = None
-        self._ligand_smiles: Optional[str] = None
-        self._msa_path: Optional[str] = None
-        self._run_options: Dict[str, Any] = {}
+        self._protein_sequence: Optional[str] = default_protein_sequence.strip() if isinstance(default_protein_sequence, str) and default_protein_sequence.strip() else None
+        self._ligand_smiles: Optional[str] = default_ligand_smiles.strip() if isinstance(default_ligand_smiles, str) and default_ligand_smiles.strip() else None
+        self._msa_path: Optional[str] = str(Path(default_msa_path).expanduser().resolve()) if isinstance(default_msa_path, str) and default_msa_path.strip() else None
+        self._run_options: Dict[str, Any] = _coerce_run_options(default_run_options)
         self._outputs: Dict[str, BioSignal] = {}
         self._cached_payloads: Dict[str, Any] = {}
         self._last_signature: Optional[str] = None

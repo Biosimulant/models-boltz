@@ -1,6 +1,6 @@
 schema_version: "2.0"
-title: "Boltz: Minimal Protein-Ligand Affinity Run"
-description: "Example wiring showing how the native Boltz-2 BioModule is referenced inside a BioSim space."
+title: "Boltz: Real Protein-Ligand Affinity Run"
+description: "Runnable space example that uses constructor defaults to execute the real upstream Boltz affinity example through the native managed-runtime BioModule."
 models:
   - repo: Biosimulant/models-boltz
     alias: boltz2_affinity
@@ -8,20 +8,22 @@ models:
     parameters:
       runtime_mode: managed
       use_msa_server: true
-      accelerator: gpu
+      accelerator: cpu
       output_format: mmcif
+      default_protein_sequence: MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ
+      default_ligand_smiles: N[C@@H](Cc1ccc(O)cc1)C(=O)O
 runtime:
   duration: 0.01
   tick_dt: 0.01
   initial_inputs: {}
 wiring: []
 scientific_context:
-  question: "Can a single native Boltz-2 wrapper be dropped into a BioSim composition and return structure plus affinity outputs without an ONNX conversion step?"
+  question: "Can the native Boltz-2 wrapper execute a real upstream protein-ligand affinity example inside a BioSim space without requiring a system-wide Boltz install?"
   mode: "native-boltz"
   assumptions:
-    - "The wrapper is run-once and caches its outputs after the first successful invocation."
-    - "Protein sequence and ligand SMILES are supplied by the caller outside this example space."
+    - "The model bootstraps a managed local Boltz runtime on first use."
+    - "MSAs are generated through the configured MSA server in this example."
   expected_observables:
     - "Affinity summary JSON fields from Boltz."
     - "Top-model confidence summary JSON fields from Boltz."
-    - "Absolute paths to generated structural artifacts."
+    - "Absolute paths to generated structure, confidence, and affinity artifacts."

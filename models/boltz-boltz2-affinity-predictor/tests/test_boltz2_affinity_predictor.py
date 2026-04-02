@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 
+import pytest
 import yaml
 
 
@@ -268,14 +271,93 @@ def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch
     assert calls["predict"] == 2
 
 
+def test_constructor_defaults_allow_space_style_usage(biosim, tmp_path, monkeypatch):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+
+    def fake_run(command, cwd, capture_output, text, timeout, check):  # noqa: ARG001
+        command = [str(item) for item in command]
+        if "-m" in command and "venv" in command:
+            runtime_root = Path(command[-1])
+            (runtime_root / "bin").mkdir(parents=True, exist_ok=True)
+            (runtime_root / "bin" / "python").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="venv", stderr="")
+        if "-m" in command and "pip" in command and "install" in command:
+            if any(item.startswith("boltz") for item in command):
+                runtime_python = Path(command[0])
+                runtime_root = runtime_python.parent.parent
+                (runtime_root / "bin" / "boltz").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="pip", stderr="")
+
+        run_root = Path(cwd)
+        prediction_dir = run_root / "output" / "predictions" / "request"
+        prediction_dir.mkdir(parents=True, exist_ok=True)
+        (prediction_dir / "request_model_0.cif").write_text("data_mock\n", encoding="utf-8")
+        (prediction_dir / "confidence_request_model_0.json").write_text(json.dumps({"confidence_score": 0.77}), encoding="utf-8")
+        (prediction_dir / "affinity_request.json").write_text(json.dumps({"affinity_probability_binary": 0.66}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    module = Boltz2AffinityPredictor(
+        work_dir=str(tmp_path),
+        runtime_dir=str(tmp_path / "managed-runtime"),
+        use_msa_server=True,
+        default_protein_sequence="MKTAYIAKQRQISFVKSHFSRQ",
+        default_ligand_smiles="CCO",
+    )
+    module.advance_to(0.1)
+    outputs = module.get_outputs()
+    assert outputs["run_metadata"].value["status"] == "completed"
+    assert outputs["affinity_summary"].value["affinity_probability_binary"] == 0.66
+
+
 def test_example_files_parse_and_reference_real_interface(biosim):
     repo_root = Path(__file__).resolve().parents[3]
-    minimal = yaml.safe_load((repo_root / "examples" / "boltz2-minimal" / "demo.yaml").read_text(encoding="utf-8"))
-    explicit = yaml.safe_load((repo_root / "examples" / "boltz2-explicit-msa" / "demo.yaml").read_text(encoding="utf-8"))
+    minimal = yaml.safe_load((repo_root / "examples" / "boltz2-minimal" / "config.yaml").read_text(encoding="utf-8"))
+    explicit = yaml.safe_load((repo_root / "examples" / "boltz2-explicit-msa" / "config.yaml").read_text(encoding="utf-8"))
     wiring = yaml.safe_load((repo_root / "examples" / "boltz2-wiring" / "space.yaml").read_text(encoding="utf-8"))
 
     assert minimal["model"]["parameters"]["runtime_mode"] == "managed"
     assert minimal["model"]["parameters"]["use_msa_server"] is True
-    assert explicit["model"]["inputs"]["msa_path"] == "/absolute/path/to/query.a3m"
+    assert explicit["model"]["inputs"]["msa_path"] == "./assets/seq1.a3m"
+    assert minimal["model"]["manifest_path"] == "models/boltz-boltz2-affinity-predictor/model.yaml"
     assert wiring["models"][0]["manifest_path"] == "models/boltz-boltz2-affinity-predictor/model.yaml"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
+    assert "default_protein_sequence" in wiring["models"][0]["parameters"]
+
+
+@pytest.mark.skipif(
+    os.getenv("BIOSIM_BOLTZ_RUN_REAL_SMOKE") != "1",
+    reason="Set BIOSIM_BOLTZ_RUN_REAL_SMOKE=1 to run the real Boltz smoke test.",
+)
+def test_real_smoke_example_runs(tmp_path):
+    repo_root = Path(__file__).resolve().parents[3]
+    output_json = tmp_path / "real-smoke-output.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "examples" / "run_example.py"),
+            "boltz2-minimal",
+            "--work-dir",
+            str(tmp_path / "runs"),
+            "--runtime-dir",
+            str(tmp_path / "runtime"),
+            "--output-json",
+            str(output_json),
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=7200,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    payload = json.loads(output_json.read_text(encoding="utf-8"))
+    outputs = payload["outputs"]
+    assert outputs["run_metadata"]["value"]["status"] == "completed"
+    structure_file = Path(outputs["structure_artifacts"]["value"]["structure_file"])
+    affinity_file = Path(outputs["structure_artifacts"]["value"]["affinity_file"])
+    confidence_file = Path(outputs["structure_artifacts"]["value"]["confidence_file"])
+    assert structure_file.exists()
+    assert affinity_file.exists()
+    assert confidence_file.exists()

@@ -1,0 +1,23 @@
+example_name: boltz2-explicit-msa
+description: Real Boltz-2 protein-ligand affinity example using the upstream Boltz affinity sequence and a checked-in upstream A3M file.
+source:
+  upstream_repo: https://github.com/jwohlwend/boltz
+  upstream_examples:
+    - examples/affinity.yaml
+    - examples/msa/seq1.a3m
+model:
+  manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
+  class: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
+  parameters:
+    runtime_mode: managed
+    use_msa_server: false
+    accelerator: cpu
+    output_format: mmcif
+    override: true
+    recycling_steps: 3
+    sampling_steps: 200
+    diffusion_samples: 1
+  inputs:
+    protein_sequence: MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ
+    ligand_smiles: N[C@@H](Cc1ccc(O)cc1)C(=O)O
+    msa_path: ./assets/seq1.a3m
