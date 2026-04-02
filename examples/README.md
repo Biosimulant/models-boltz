@@ -24,3 +24,5 @@ module in this repository.
 - They are designed to stay aligned with the actual constructor parameters,
   input ports, and output ports of `Boltz2AffinityPredictor`.
 - They do not ship large MSAs, structures, or Boltz outputs.
+- The first real run will bootstrap a managed local Boltz runtime unless you
+  explicitly switch to `runtime_mode: external`.

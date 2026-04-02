@@ -39,6 +39,7 @@ This repository is not for:
 The initial Boltz-2 model:
 - accepts a protein sequence and ligand SMILES as BioSim inputs
 - supports either a provided MSA path or Boltz server-side MSA generation
+- bootstraps a local managed Boltz runtime on first use by default
 - builds a Boltz YAML request inside a run directory
 - invokes `boltz predict`
 - emits compact BioSignals for affinity, confidence, structure artifacts, and
@@ -56,15 +57,18 @@ See [`examples/README.md`](examples/README.md) for the example inventory.
 ## Prerequisites
 
 The wrapper module itself uses the Python standard library plus `biosim`.
-Actual Boltz execution also requires an external Boltz installation and its
-runtime environment.
+Actual Boltz execution no longer depends on a system-wide Boltz install by
+default: the model bootstraps a local managed runtime under this repository on
+first use.
 
 ```bash
 pip install "biosim @ git+https://github.com/BioSimulant/biosim.git@main"
 ```
 
-For real runs, make sure the `boltz` CLI is available on `PATH` or configure
-the module with an explicit executable path.
+For real runs, the first execution still needs:
+- internet access to install Boltz and its Python dependencies
+- a working Python environment with `venv`
+- suitable hardware for the requested accelerator mode
 
 ## Validation
 

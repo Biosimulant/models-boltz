@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: 2025-present Demi <bjaiye1@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-"""Boltz-2 affinity-focused BioModule wrapper."""
+"""Boltz-2 affinity-focused BioModule wrapper with managed local runtime."""
 
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,9 +38,8 @@ def _coerce_run_options(value: Any) -> Dict[str, Any]:
         return {}
     out: Dict[str, Any] = {}
     for key, item in value.items():
-        if not isinstance(key, str):
-            continue
-        out[key] = item
+        if isinstance(key, str):
+            out[key] = item
     return out
 
 
@@ -47,6 +49,11 @@ class Boltz2AffinityPredictor(BioModule):
     def __init__(
         self,
         boltz_executable: str = "boltz",
+        runtime_mode: str = "managed",
+        runtime_dir: Optional[str] = None,
+        runtime_python: Optional[str] = None,
+        boltz_package_spec: Optional[str] = None,
+        upgrade_runtime: bool = False,
         work_dir: Optional[str] = None,
         cache_dir: Optional[str] = None,
         use_msa_server: bool = False,
@@ -58,10 +65,15 @@ class Boltz2AffinityPredictor(BioModule):
         diffusion_samples: int = 1,
         override: bool = True,
         command_timeout_s: float = 3600.0,
+        runtime_setup_timeout_s: float = 1800.0,
         min_dt: float = 0.01,
     ) -> None:
         self.min_dt = min_dt
         self.boltz_executable = boltz_executable
+        self.runtime_mode = runtime_mode
+        self.runtime_python = runtime_python
+        self.boltz_package_spec = boltz_package_spec
+        self.upgrade_runtime = upgrade_runtime
         self.work_dir = Path(work_dir).resolve() if work_dir else None
         self.cache_dir = Path(cache_dir).resolve() if cache_dir else None
         self.use_msa_server = use_msa_server
@@ -73,6 +85,14 @@ class Boltz2AffinityPredictor(BioModule):
         self.diffusion_samples = diffusion_samples
         self.override = override
         self.command_timeout_s = command_timeout_s
+        self.runtime_setup_timeout_s = runtime_setup_timeout_s
+
+        repo_root = Path(__file__).resolve().parents[3]
+        self.runtime_dir = (
+            Path(runtime_dir).expanduser().resolve()
+            if runtime_dir
+            else (repo_root / ".runtime" / "boltz2").resolve()
+        )
 
         self._protein_sequence: Optional[str] = None
         self._ligand_smiles: Optional[str] = None
@@ -165,17 +185,33 @@ class Boltz2AffinityPredictor(BioModule):
         request_path.write_text(self._build_request_document(resolved), encoding="utf-8")
         output_dir = run_root / "output"
 
-        command = self._build_command(request_path, output_dir, resolved)
-        metadata = {
+        metadata: Dict[str, Any] = {
             "status": "running",
-            "command": command,
+            "command": [],
             "cwd": str(run_root),
             "input_yaml_path": str(request_path),
             "output_dir": str(output_dir),
             "use_msa_server": bool(resolved["use_msa_server"]),
             "stdout": "",
             "stderr": "",
+            "runtime_mode": resolved["runtime_mode"],
+            "runtime_dir": str(self.runtime_dir),
+            "runtime_bootstrapped": False,
+            "runtime_setup_commands": [],
         }
+
+        try:
+            resolved_executable = self._resolve_boltz_executable(run_root, resolved, metadata)
+        except Exception as exc:  # noqa: BLE001
+            metadata["status"] = "error"
+            metadata["error"] = f"failed to prepare Boltz runtime: {exc}"
+            self._set_error_payload(metadata["error"], metadata=metadata)
+            self._last_signature = signature
+            self._emit_outputs(t)
+            return
+
+        command = self._build_command(resolved_executable, request_path, output_dir, resolved)
+        metadata["command"] = command
 
         try:
             completed = subprocess.run(
@@ -265,10 +301,16 @@ class Boltz2AffinityPredictor(BioModule):
             "msa_server_url": None,
             "max_parallel_samples": None,
             "affinity_mw_correction": False,
+            "runtime_mode": self.runtime_mode,
+            "upgrade_runtime": self.upgrade_runtime,
+            "boltz_package_spec": self.boltz_package_spec,
         }
         for key, value in self._run_options.items():
             if key in resolved:
                 resolved[key] = value
+
+        if not isinstance(resolved["boltz_package_spec"], str) or not resolved["boltz_package_spec"].strip():
+            resolved["boltz_package_spec"] = "boltz[cuda]" if resolved["accelerator"] == "gpu" else "boltz"
         return resolved
 
     def _create_run_root(self) -> Path:
@@ -314,9 +356,15 @@ class Boltz2AffinityPredictor(BioModule):
 
         return yaml.safe_dump(request, sort_keys=False)
 
-    def _build_command(self, request_path: Path, output_dir: Path, resolved: Mapping[str, Any]) -> list[str]:
+    def _build_command(
+        self,
+        boltz_executable: str,
+        request_path: Path,
+        output_dir: Path,
+        resolved: Mapping[str, Any],
+    ) -> list[str]:
         command = [
-            self.boltz_executable,
+            boltz_executable,
             "predict",
             str(request_path),
             "--out_dir",
@@ -347,6 +395,92 @@ class Boltz2AffinityPredictor(BioModule):
         if bool(resolved.get("affinity_mw_correction")):
             command.append("--affinity_mw_correction")
         return command
+
+    def _resolve_boltz_executable(
+        self,
+        run_root: Path,
+        resolved: Mapping[str, Any],
+        metadata: Dict[str, Any],
+    ) -> str:
+        runtime_mode = str(resolved["runtime_mode"]).strip().lower()
+        if runtime_mode == "external":
+            resolved_exec = shutil.which(self.boltz_executable) if not os.path.isabs(self.boltz_executable) else self.boltz_executable
+            if not resolved_exec:
+                raise FileNotFoundError(f"could not find boltz executable: {self.boltz_executable}")
+            metadata["resolved_boltz_executable"] = str(resolved_exec)
+            return str(resolved_exec)
+        if runtime_mode != "managed":
+            raise ValueError(f"unsupported runtime_mode: {resolved['runtime_mode']}")
+        return self._ensure_managed_runtime(run_root, resolved, metadata)
+
+    def _ensure_managed_runtime(
+        self,
+        run_root: Path,
+        resolved: Mapping[str, Any],
+        metadata: Dict[str, Any],
+    ) -> str:
+        runtime_root = self.runtime_dir
+        runtime_root.parent.mkdir(parents=True, exist_ok=True)
+
+        venv_python = self._venv_path(runtime_root, "python")
+        boltz_bin = self._venv_path(runtime_root, "boltz")
+        base_python = self.runtime_python or sys.executable or shutil.which("python3")
+        if not base_python:
+            raise RuntimeError("no Python executable available to create managed Boltz runtime")
+
+        if not venv_python.exists():
+            self._run_setup_command(
+                [base_python, "-m", "venv", str(runtime_root)],
+                run_root,
+                metadata,
+            )
+            metadata["runtime_bootstrapped"] = True
+
+        if bool(resolved["upgrade_runtime"]) or not boltz_bin.exists():
+            self._run_setup_command(
+                [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
+                run_root,
+                metadata,
+            )
+            self._run_setup_command(
+                [str(venv_python), "-m", "pip", "install", str(resolved["boltz_package_spec"])],
+                run_root,
+                metadata,
+            )
+            metadata["runtime_bootstrapped"] = True
+
+        if not boltz_bin.exists():
+            raise FileNotFoundError(f"managed Boltz executable was not created at {boltz_bin}")
+
+        metadata["runtime_python_executable"] = str(venv_python)
+        metadata["resolved_boltz_executable"] = str(boltz_bin)
+        return str(boltz_bin)
+
+    def _run_setup_command(
+        self,
+        command: list[str],
+        run_root: Path,
+        metadata: Dict[str, Any],
+    ) -> None:
+        metadata["runtime_setup_commands"].append(command)
+        completed = subprocess.run(
+            command,
+            cwd=run_root,
+            capture_output=True,
+            text=True,
+            timeout=self.runtime_setup_timeout_s,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "runtime setup command failed: "
+                f"{command} :: stdout={completed.stdout!r} stderr={completed.stderr!r}"
+            )
+
+    def _venv_path(self, runtime_root: Path, executable: str) -> Path:
+        bin_dir = "Scripts" if os.name == "nt" else "bin"
+        suffix = ".exe" if os.name == "nt" and not executable.endswith(".exe") else ""
+        return runtime_root / bin_dir / f"{executable}{suffix}"
 
     def _find_prediction_dir(self, output_dir: Path) -> Path:
         predictions_root = output_dir / "predictions"
@@ -383,6 +517,10 @@ class Boltz2AffinityPredictor(BioModule):
             "output_dir": None,
             "stdout": "",
             "stderr": "",
+            "runtime_mode": self.runtime_mode,
+            "runtime_dir": str(self.runtime_dir),
+            "runtime_bootstrapped": False,
+            "runtime_setup_commands": [],
         }
         payload["status"] = "error"
         payload["error"] = error

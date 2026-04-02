@@ -11,6 +11,6 @@ This minimal example should emit four BioSignals:
 plus the Boltz confidence and affinity JSON files.
 
 This example assumes:
-- the `boltz` CLI is installed
+- internet access is available for the first managed-runtime bootstrap
 - GPU-oriented execution is available
 - server-side MSA generation is acceptable for the run

@@ -6,6 +6,7 @@ models:
     alias: boltz2_affinity
     manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
     parameters:
+      runtime_mode: managed
       use_msa_server: true
       accelerator: gpu
       output_format: mmcif

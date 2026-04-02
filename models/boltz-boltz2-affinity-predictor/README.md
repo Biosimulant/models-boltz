@@ -10,7 +10,8 @@ Boltz-2 protein-ligand affinity workflow.
   - an explicit `msa_path` input, or
   - `use_msa_server: true`
 - writes a Boltz YAML request into a run directory
-- executes the external `boltz` CLI
+- bootstraps a local managed Boltz runtime on first use by default
+- executes the managed `boltz` CLI
 - exposes compact BioSignals for:
   - `affinity_summary`
   - `confidence_summary`
@@ -35,16 +36,23 @@ Boltz-2 protein-ligand affinity workflow.
 | `structure_artifacts` | Absolute paths to generated structure and summary artifacts |
 | `run_metadata` | Command, output directory, status, and captured logs |
 
-## Runtime Assumptions
+## Runtime Behavior
 
-This wrapper uses the Python standard library plus `PyYAML` for request
-generation, but real execution requires an external Boltz runtime:
+By default this module is self-contained at the wrapper level:
 
-- `boltz` must be installed and available on `PATH`, or configured via
-  `boltz_executable`
-- GPU-oriented execution is the intended default
+- it creates a local virtual environment under `.runtime/boltz2`
+- it installs Boltz there on first run
+- it then reuses that managed runtime on later runs
+
+Important constraints:
+- internet access is still required on the first run so the managed runtime can
+  install Boltz and its dependencies
+- GPU-oriented execution is still the intended default
 - large model weights, MSAs, and generated structures are not checked into this
   repository
+
+You can still opt into external-runtime behavior with `runtime_mode: external`,
+but the default is `managed`.
 
 ## Examples
 
