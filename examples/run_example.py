@@ -25,6 +25,8 @@ def _load_config(config_path: Path) -> dict:
 
 
 def _resolve_path(base_dir: Path, value: str) -> str:
+    if value.strip().lower() == "empty":
+        return "empty"
     path = Path(value).expanduser()
     if path.is_absolute():
         return str(path)
@@ -40,7 +42,7 @@ def main() -> int:
         "example",
         nargs="?",
         default="boltz2-minimal",
-        choices=["boltz2-minimal", "boltz2-explicit-msa"],
+        choices=["boltz2-minimal", "boltz2-explicit-msa", "boltz2-short-no-msa"],
         help="Example folder to run.",
     )
     parser.add_argument("--config", type=Path, help="Explicit config path. Overrides example selection.")

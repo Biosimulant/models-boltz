@@ -14,6 +14,11 @@ module in this repository.
 - same real upstream affinity example with a checked-in upstream-derived A3M
 - useful for reproducible precomputed-MSA workflows
 
+### `boltz2-short-no-msa`
+- short real upstream protein plus real upstream affinity ligand
+- uses `msa_path: empty` from upstream Boltz input conventions
+- best local smoke-test path for CPU-only validation
+
 ### `boltz2-wiring`
 - a `space.yaml` with real constructor defaults so the example is not just a
   placeholder manifest reference
@@ -30,6 +35,12 @@ Run the explicit-MSA example:
 
 ```bash
 python3 examples/run_example.py boltz2-explicit-msa
+```
+
+Run the short no-MSA smoke example:
+
+```bash
+python3 examples/run_example.py boltz2-short-no-msa
 ```
 
 Write results to a JSON file:
@@ -53,5 +64,6 @@ python3 examples/run_example.py boltz2-minimal \
   input ports, and output ports.
 - The first real run bootstraps a managed local Boltz runtime unless you
   explicitly switch to `runtime_mode: external`.
-- CPU is used in the checked-in example configs for portability; real runs may
-  still take a long time.
+- CPU is used in the checked-in example configs for portability.
+- `boltz2-short-no-msa` is the most practical end-to-end smoke example on a local machine.
+- The two affinity-length examples may still take a long time on CPU.

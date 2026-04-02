@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
+import hashlib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -19,6 +21,8 @@ import yaml
 
 from biosim import BioModule
 from biosim.signals import BioSignal, SignalMetadata
+
+_SUPPORTED_PYTHON_MINORS = (10, 11, 12)
 
 
 def _coerce_string(value: Any, preferred_key: str) -> Optional[str]:
@@ -97,6 +101,8 @@ class Boltz2AffinityPredictor(BioModule):
             if runtime_dir
             else (repo_root / ".runtime" / "boltz2").resolve()
         )
+        if self.cache_dir is None:
+            self.cache_dir = (self.runtime_dir.parent / "boltz-cache").resolve()
 
         self._protein_sequence: Optional[str] = default_protein_sequence.strip() if isinstance(default_protein_sequence, str) and default_protein_sequence.strip() else None
         self._ligand_smiles: Optional[str] = default_ligand_smiles.strip() if isinstance(default_ligand_smiles, str) and default_ligand_smiles.strip() else None
@@ -195,6 +201,7 @@ class Boltz2AffinityPredictor(BioModule):
             "cwd": str(run_root),
             "input_yaml_path": str(request_path),
             "output_dir": str(output_dir),
+            "cache_dir": str(self.cache_dir),
             "use_msa_server": bool(resolved["use_msa_server"]),
             "stdout": "",
             "stderr": "",
@@ -202,10 +209,13 @@ class Boltz2AffinityPredictor(BioModule):
             "runtime_dir": str(self.runtime_dir),
             "runtime_bootstrapped": False,
             "runtime_setup_commands": [],
+            "cache_repaired": False,
+            "retry_count": 0,
         }
 
         try:
             resolved_executable = self._resolve_boltz_executable(run_root, resolved, metadata)
+            self._prepare_cache_dir(metadata)
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
             metadata["error"] = f"failed to prepare Boltz runtime: {exc}"
@@ -218,14 +228,7 @@ class Boltz2AffinityPredictor(BioModule):
         metadata["command"] = command
 
         try:
-            completed = subprocess.run(
-                command,
-                cwd=run_root,
-                capture_output=True,
-                text=True,
-                timeout=self.command_timeout_s,
-                check=False,
-            )
+            completed = self._execute_boltz_command(command, run_root, metadata)
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
             metadata["error"] = f"failed to execute boltz: {exc}"
@@ -233,10 +236,6 @@ class Boltz2AffinityPredictor(BioModule):
             self._last_signature = signature
             self._emit_outputs(t)
             return
-
-        metadata["stdout"] = completed.stdout
-        metadata["stderr"] = completed.stderr
-        metadata["returncode"] = completed.returncode
 
         if completed.returncode != 0:
             metadata["status"] = "error"
@@ -290,6 +289,56 @@ class Boltz2AffinityPredictor(BioModule):
 
     def get_outputs(self) -> Dict[str, BioSignal]:
         return dict(self._outputs)
+
+    def visualize(self) -> Optional[list[Dict[str, Any]]]:
+        run_metadata = self._cached_payloads.get("run_metadata", {})
+        artifacts = self._cached_payloads.get("structure_artifacts", {})
+        confidence = self._cached_payloads.get("confidence_summary", {})
+        affinity = self._cached_payloads.get("affinity_summary", {})
+
+        if not isinstance(run_metadata, Mapping) or run_metadata.get("status") != "completed":
+            return None
+        if not isinstance(artifacts, Mapping):
+            return None
+
+        structure_file = artifacts.get("structure_file")
+        if not isinstance(structure_file, str) or not structure_file:
+            return None
+
+        structure_path = Path(structure_file).expanduser().resolve()
+        structure_format = self._structure_format(structure_path)
+        if structure_format is None:
+            return None
+
+        annotations = self._build_structure_annotations(confidence, affinity)
+        rows = [[label, str(value)] for label, value in annotations]
+
+        return [
+            {
+                "render": "structure3d",
+                "description": "Top-ranked Boltz structure prediction for the latest protein-ligand run.",
+                "data": {
+                    "title": "Predicted Complex Structure",
+                    "source": {
+                        "kind": "artifact",
+                        "artifact_id": self._structure_artifact_id(structure_path),
+                        "path": str(structure_path),
+                    },
+                    "format": structure_format,
+                    "annotations": [{"label": label, "value": value} for label, value in annotations],
+                    "initial_view": {"reset_camera": True},
+                },
+            },
+            {
+                "render": "table",
+                "description": "Key affinity and confidence metrics extracted from the latest Boltz outputs.",
+                "data": {
+                    "title": "Boltz Summary",
+                    "columns": ["Metric", "Value"],
+                    "rows": rows,
+                },
+            },
+        ]
 
     def _resolved_options(self) -> Dict[str, Any]:
         resolved: Dict[str, Any] = {
@@ -350,7 +399,10 @@ class Boltz2AffinityPredictor(BioModule):
             ],
         }
         if self._msa_path and not resolved["use_msa_server"]:
-            request["sequences"][0]["protein"]["msa"] = str(Path(self._msa_path).expanduser().resolve())
+            if self._msa_path.strip().lower() == "empty":
+                request["sequences"][0]["protein"]["msa"] = "empty"
+            else:
+                request["sequences"][0]["protein"]["msa"] = str(Path(self._msa_path).expanduser().resolve())
 
         template_path = resolved.get("template_path")
         if isinstance(template_path, str) and template_path.strip():
@@ -426,18 +478,17 @@ class Boltz2AffinityPredictor(BioModule):
         runtime_root = self.runtime_dir
         runtime_root.parent.mkdir(parents=True, exist_ok=True)
 
+        base_python = self._select_runtime_python()
+        metadata["runtime_base_python"] = str(base_python)
+
         venv_python = self._venv_path(runtime_root, "python")
         boltz_bin = self._venv_path(runtime_root, "boltz")
-        base_python = self.runtime_python or sys.executable or shutil.which("python3")
-        if not base_python:
-            raise RuntimeError("no Python executable available to create managed Boltz runtime")
+        if venv_python.exists() and not self._python_supports_boltz(venv_python):
+            shutil.rmtree(runtime_root)
+            metadata["runtime_recreated"] = True
 
         if not venv_python.exists():
-            self._run_setup_command(
-                [base_python, "-m", "venv", str(runtime_root)],
-                run_root,
-                metadata,
-            )
+            self._run_setup_command([str(base_python), "-m", "venv", str(runtime_root)], run_root, metadata)
             metadata["runtime_bootstrapped"] = True
 
         if bool(resolved["upgrade_runtime"]) or not boltz_bin.exists():
@@ -459,6 +510,145 @@ class Boltz2AffinityPredictor(BioModule):
         metadata["runtime_python_executable"] = str(venv_python)
         metadata["resolved_boltz_executable"] = str(boltz_bin)
         return str(boltz_bin)
+
+    def _prepare_cache_dir(self, metadata: Dict[str, Any]) -> None:
+        if self.cache_dir is None:
+            return
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        tar_path = self.cache_dir / "mols.tar"
+        mols_dir = self.cache_dir / "mols"
+        if mols_dir.exists() and not any(mols_dir.iterdir()):
+            shutil.rmtree(mols_dir)
+            metadata["cache_repaired"] = True
+        if tar_path.exists() and not mols_dir.exists() and not self._tar_is_readable(tar_path):
+            tar_path.unlink(missing_ok=True)
+            metadata["cache_repaired"] = True
+        for checkpoint in ("boltz2_conf.ckpt", "boltz2_aff.ckpt", "boltz1_conf.ckpt", "ccd.pkl"):
+            checkpoint_path = self.cache_dir / checkpoint
+            if checkpoint_path.exists() and checkpoint_path.stat().st_size == 0:
+                checkpoint_path.unlink(missing_ok=True)
+                metadata["cache_repaired"] = True
+
+    def _tar_is_readable(self, tar_path: Path) -> bool:
+        try:
+            with tarfile.open(tar_path, "r") as tar:
+                for _ in tar:
+                    pass
+        except (OSError, tarfile.TarError):
+            return False
+        return True
+
+    def _execute_boltz_command(
+        self,
+        command: list[str],
+        run_root: Path,
+        metadata: Dict[str, Any],
+    ) -> subprocess.CompletedProcess[str]:
+        completed = self._run_predict_command(command, run_root)
+        if completed.returncode == 0:
+            metadata["stdout"] = completed.stdout
+            metadata["stderr"] = completed.stderr
+            metadata["returncode"] = completed.returncode
+            return completed
+
+        if self._should_retry_after_cache_error(completed) and self.cache_dir is not None:
+            self._purge_corrupted_cache()
+            metadata["cache_repaired"] = True
+            metadata["retry_count"] = 1
+            retry = self._run_predict_command(command, run_root)
+            metadata["stdout"] = f"{completed.stdout}\n[retry-after-cache-repair]\n{retry.stdout}".strip()
+            metadata["stderr"] = f"{completed.stderr}\n[retry-after-cache-repair]\n{retry.stderr}".strip()
+            metadata["returncode"] = retry.returncode
+            return retry
+
+        metadata["stdout"] = completed.stdout
+        metadata["stderr"] = completed.stderr
+        metadata["returncode"] = completed.returncode
+        return completed
+
+    def _run_predict_command(
+        self,
+        command: list[str],
+        run_root: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            command,
+            cwd=run_root,
+            capture_output=True,
+            text=True,
+            timeout=self.command_timeout_s,
+            check=False,
+        )
+
+    def _should_retry_after_cache_error(self, completed: subprocess.CompletedProcess[str]) -> bool:
+        combined = f"{completed.stdout}\n{completed.stderr}".lower()
+        return "unexpected end of data" in combined or "tarfile.readerror" in combined
+
+    def _purge_corrupted_cache(self) -> None:
+        if self.cache_dir is None:
+            return
+        for name in ("mols.tar", "boltz2_conf.ckpt", "boltz2_aff.ckpt", "boltz1_conf.ckpt"):
+            (self.cache_dir / name).unlink(missing_ok=True)
+        mols_dir = self.cache_dir / "mols"
+        if mols_dir.exists():
+            shutil.rmtree(mols_dir)
+
+    def _select_runtime_python(self) -> Path:
+        if self.runtime_python:
+            candidate = Path(self.runtime_python).expanduser().resolve()
+            if not candidate.exists():
+                raise FileNotFoundError(f"runtime_python does not exist: {candidate}")
+            if not self._python_supports_boltz(candidate):
+                raise RuntimeError(
+                    f"runtime_python must be Python 3.10-3.12 for Boltz, got {self._python_version_string(candidate)}"
+                )
+            return candidate
+
+        candidates = [Path(sys.executable)]
+        for name in ("python3.12", "python3.11", "python3.10"):
+            resolved = shutil.which(name)
+            if resolved:
+                candidates.append(Path(resolved).resolve())
+
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = str(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            if candidate.exists() and self._python_supports_boltz(candidate):
+                return candidate
+
+        raise RuntimeError(
+            "managed Boltz runtime requires Python 3.10-3.12, but no compatible interpreter was found. "
+            "Install python3.12 or set runtime_python explicitly."
+        )
+
+    def _python_supports_boltz(self, python_executable: Path) -> bool:
+        version = self._python_version_string(python_executable)
+        try:
+            major_text, minor_text = version.split(".", 1)
+            major = int(major_text)
+            minor = int(minor_text)
+        except ValueError:
+            return False
+        return major == 3 and minor in _SUPPORTED_PYTHON_MINORS
+
+    def _python_version_string(self, python_executable: Path) -> str:
+        completed = subprocess.run(
+            [str(python_executable), "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            cwd=python_executable.parent,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"failed to inspect Python interpreter {python_executable}: "
+                f"stdout={completed.stdout!r} stderr={completed.stderr!r}"
+            )
+        return completed.stdout.strip()
 
     def _run_setup_command(
         self,
@@ -511,6 +701,44 @@ class Boltz2AffinityPredictor(BioModule):
         if isinstance(loaded, dict):
             return loaded
         raise ValueError(f"expected JSON object in {path}")
+
+    def _structure_format(self, path: Path) -> Optional[str]:
+        suffix = path.suffix.lower()
+        if suffix == ".pdb":
+            return "pdb"
+        if suffix in {".cif", ".mmcif"}:
+            return "mmcif"
+        return None
+
+    def _structure_artifact_id(self, path: Path) -> str:
+        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16]
+        return f"structure-{digest}"
+
+    def _build_structure_annotations(
+        self,
+        confidence: Any,
+        affinity: Any,
+    ) -> list[tuple[str, Any]]:
+        pairs: list[tuple[str, Any]] = []
+        if isinstance(confidence, Mapping):
+            for key, label in (
+                ("confidence_score", "Confidence Score"),
+                ("ptm", "pTM"),
+                ("iptm", "ipTM"),
+                ("complex_plddt", "Complex pLDDT"),
+            ):
+                value = confidence.get(key)
+                if isinstance(value, (int, float, str, bool)):
+                    pairs.append((label, value))
+        if isinstance(affinity, Mapping):
+            for key, label in (
+                ("affinity_pred_value", "Affinity Prediction"),
+                ("affinity_probability_binary", "Binder Probability"),
+            ):
+                value = affinity.get(key)
+                if isinstance(value, (int, float, str, bool)):
+                    pairs.append((label, value))
+        return pairs
 
     def _set_error_payload(self, error: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         payload = metadata or {

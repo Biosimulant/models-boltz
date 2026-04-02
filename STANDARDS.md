@@ -59,8 +59,8 @@ Rules:
 `REQUIRED`:
 - large structural outputs must stay file-backed rather than being embedded
   directly into manifests or checked into the repo
-- models must document the expected external executable and hardware/runtime
-  assumptions
+- models must document managed-runtime behavior plus any optional external
+  executable and hardware/runtime assumptions
 - subprocess boundaries must be explicit in code and tested
 - example files must stay aligned with the current constructor parameters,
   input ports, and output ports
@@ -70,6 +70,8 @@ Rules:
   ticks
 - emit compact structured summaries plus absolute artifact paths
 - record command, output directory, and stderr/stdout in run metadata
+- emit `structure3d` visuals when a model produces `mmCIF` or `PDB` artifacts
+  so compatible BioSim clients can inspect the structure directly
 
 ### Tests
 
@@ -88,7 +90,7 @@ Rules:
 Examples live under `examples/` and must:
 - use the actual public module interface
 - avoid ONNX terminology unless the model actually uses ONNX
-- use placeholders instead of checked-in biological datasets
+- prefer real, runnable small examples over placeholder-only examples
 - document what must exist locally before the example can run
 
 Example folders should include:

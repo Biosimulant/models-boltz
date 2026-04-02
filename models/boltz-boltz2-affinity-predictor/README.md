@@ -17,6 +17,9 @@ Boltz-2 protein-ligand affinity workflow.
   - `confidence_summary`
   - `structure_artifacts`
   - `run_metadata`
+- exposes visuals for compatible clients:
+  - `structure3d` for the top-ranked `mmCIF` or `PDB` artifact
+  - `table` for key affinity and confidence metrics
 
 ## Input Ports
 
@@ -41,8 +44,12 @@ Boltz-2 protein-ligand affinity workflow.
 By default this module is self-contained at the wrapper level:
 
 - it creates a local virtual environment under `.runtime/boltz2`
+- it uses a repo-local cache under `.runtime/boltz-cache` unless `cache_dir` is
+  overridden
 - it installs Boltz there on first run
 - it then reuses that managed runtime on later runs
+- it retries once after purging known-corrupted cached assets such as
+  `mols.tar`, `mols/`, or partial checkpoint files
 
 Important constraints:
 - internet access is still required on the first run so the managed runtime can
@@ -53,6 +60,21 @@ Important constraints:
 
 You can still opt into external-runtime behavior with `runtime_mode: external`,
 but the default is `managed`.
+
+## Visualization Contract
+
+After a successful run, `visualize()` returns:
+- a `structure3d` card backed by the selected structure artifact
+- a `table` summary for affinity and confidence highlights
+
+The structure visual uses the shared BioSim payload shape:
+- `source.kind = "artifact"`
+- `source.artifact_id = <stable id>`
+- `source.path = <absolute path>` for local/desktop consumers
+- `format = "mmcif" | "pdb"`
+
+BioSim SimUI strips `source.path` before sending visuals to the browser and
+serves the structure through the artifact endpoint instead.
 
 ## Examples
 
