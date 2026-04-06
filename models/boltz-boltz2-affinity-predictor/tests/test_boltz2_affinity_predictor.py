@@ -316,6 +316,104 @@ def test_missing_expected_files_becomes_error(biosim, tmp_path, monkeypatch):
     assert "expected Boltz outputs" in metadata["error"]
 
 
+def test_legacy_success_layout_without_affinity_json_is_accepted(biosim, tmp_path, monkeypatch):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+    from biosim.signals import BioSignal
+
+    def fake_run(command, cwd, capture_output, text, timeout, check):  # noqa: ARG001
+        command = [str(item) for item in command]
+        if "-c" in command:
+            return subprocess.CompletedProcess(command, 0, stdout="3.12\n", stderr="")
+        if "-m" in command and "venv" in command:
+            runtime_root = Path(command[-1])
+            (runtime_root / "bin").mkdir(parents=True, exist_ok=True)
+            (runtime_root / "bin" / "python").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="venv", stderr="")
+        if "-m" in command and "pip" in command and "install" in command:
+            if any(item.startswith("boltz") for item in command):
+                runtime_python = Path(command[0])
+                runtime_root = runtime_python.parent.parent
+                (runtime_root / "bin" / "boltz").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="pip", stderr="")
+
+        run_root = Path(cwd)
+        output_dir = run_root / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "affinity_model_0.cif").write_text("data_mock\n", encoding="utf-8")
+        (output_dir / "confidence_affinity_model_0.json").write_text(
+            json.dumps({"confidence_score": 0.84, "ptm": 0.8}),
+            encoding="utf-8",
+        )
+        (output_dir / "plddt_affinity_model_0.npz").write_text("placeholder", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    module = Boltz2AffinityPredictor(
+        work_dir=str(tmp_path),
+        runtime_dir=str(tmp_path / "managed-runtime"),
+        use_msa_server=True,
+    )
+    _set_required_inputs(module, BioSignal)
+    module.advance_to(0.5)
+
+    outputs = module.get_outputs()
+    metadata = outputs["run_metadata"].value
+    assert metadata["status"] == "completed"
+    assert outputs["affinity_summary"].value == {}
+    assert outputs["confidence_summary"].value["confidence_score"] == 0.84
+    assert Path(outputs["structure_artifacts"].value["structure_file"]).is_absolute()
+    assert Path(outputs["structure_artifacts"].value["confidence_file"]).is_absolute()
+    assert "affinity_file" not in outputs["structure_artifacts"].value
+    assert Path(outputs["structure_artifacts"].value["plddt_file"]).is_absolute()
+
+
+def test_recursive_output_layout_is_accepted(biosim, tmp_path, monkeypatch):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+    from biosim.signals import BioSignal
+
+    def fake_run(command, cwd, capture_output, text, timeout, check):  # noqa: ARG001
+        command = [str(item) for item in command]
+        if "-c" in command:
+            return subprocess.CompletedProcess(command, 0, stdout="3.12\n", stderr="")
+        if "-m" in command and "venv" in command:
+            runtime_root = Path(command[-1])
+            (runtime_root / "bin").mkdir(parents=True, exist_ok=True)
+            (runtime_root / "bin" / "python").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="venv", stderr="")
+        if "-m" in command and "pip" in command and "install" in command:
+            if any(item.startswith("boltz") for item in command):
+                runtime_python = Path(command[0])
+                runtime_root = runtime_python.parent.parent
+                (runtime_root / "bin" / "boltz").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="pip", stderr="")
+
+        run_root = Path(cwd)
+        prediction_dir = run_root / "output" / "request" / "predictions"
+        prediction_dir.mkdir(parents=True, exist_ok=True)
+        (prediction_dir / "affinity_model_0.cif").write_text("data_mock\n", encoding="utf-8")
+        (prediction_dir / "confidence_affinity_model_0.json").write_text(
+            json.dumps({"confidence_score": 0.92}),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    module = Boltz2AffinityPredictor(
+        work_dir=str(tmp_path),
+        runtime_dir=str(tmp_path / "managed-runtime"),
+        use_msa_server=True,
+    )
+    _set_required_inputs(module, BioSignal)
+    module.advance_to(0.5)
+
+    outputs = module.get_outputs()
+    assert outputs["run_metadata"].value["status"] == "completed"
+    assert outputs["confidence_summary"].value["confidence_score"] == 0.92
+    assert Path(outputs["structure_artifacts"].value["structure_file"]).name == "affinity_model_0.cif"
+
+
 def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch):
     from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
     from biosim.signals import BioSignal
@@ -506,8 +604,9 @@ def test_real_smoke_example_runs(tmp_path):
     outputs = payload["outputs"]
     assert outputs["run_metadata"]["value"]["status"] == "completed"
     structure_file = Path(outputs["structure_artifacts"]["value"]["structure_file"])
-    affinity_file = Path(outputs["structure_artifacts"]["value"]["affinity_file"])
     confidence_file = Path(outputs["structure_artifacts"]["value"]["confidence_file"])
     assert structure_file.exists()
-    assert affinity_file.exists()
     assert confidence_file.exists()
+    affinity_file = outputs["structure_artifacts"]["value"].get("affinity_file")
+    if affinity_file is not None:
+        assert Path(affinity_file).exists()

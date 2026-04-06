@@ -61,6 +61,25 @@ Important constraints:
 You can still opt into external-runtime behavior with `runtime_mode: external`,
 but the default is `managed`.
 
+## Remote Execution
+
+This package is also prepared for the generic BioSim remote executor path.
+
+- the manifest pins `boltz[cuda]==2.2.1` so the remote sandbox installs the
+  CUDA optional dependencies required by Boltz on Modal GPUs through the normal
+  runtime dependency policy
+- the manifest declares remote-only init overrides so Modal runs force
+  `runtime_mode: external`
+- remote runs place the Boltz cache under
+  `${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz` so model weights and CCD
+  downloads persist across runs on the mounted remote volume
+- remote provider preflight checks fail early on missing Modal auth, invalid
+  mount roots, missing packaged mounts, or invalid remote size settings
+- local runs keep the self-contained managed-runtime default
+
+For release-grade end-to-end validation, target Linux + NVIDIA GPU on Modal.
+Local macOS runs remain useful for smoke-testing the wrapper only.
+
 ## Visualization Contract
 
 After a successful run, `visualize()` returns:
@@ -82,3 +101,10 @@ See:
 - [`examples/boltz2-minimal`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-minimal)
 - [`examples/boltz2-explicit-msa`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-explicit-msa)
 - [`examples/boltz2-wiring`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-wiring)
+
+Remote smoke command:
+
+```bash
+cd /Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/bsim-platform/backend
+BIOSIM_MODAL_RUN_REAL_SMOKE=1 ./.venv/bin/pytest -q tests/test_executor_remote_overrides.py -k modal_real_boltz_smoke
+```

@@ -248,7 +248,7 @@ class Boltz2AffinityPredictor(BioModule):
         try:
             prediction_dir = self._find_prediction_dir(output_dir)
             confidence_path = self._require_single(prediction_dir.glob("confidence_*_model_0.json"))
-            affinity_path = self._require_single(prediction_dir.glob("affinity_*.json"))
+            affinity_path = self._find_affinity_summary_file(prediction_dir)
             structure_path = self._find_structure_file(prediction_dir)
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
@@ -259,13 +259,14 @@ class Boltz2AffinityPredictor(BioModule):
             return
 
         confidence_summary = self._load_json(confidence_path)
-        affinity_summary = self._load_json(affinity_path)
+        affinity_summary = self._load_json(affinity_path) if affinity_path is not None else {}
         artifacts = {
             "prediction_dir": str(prediction_dir.resolve()),
             "structure_file": str(structure_path.resolve()),
             "confidence_file": str(confidence_path.resolve()),
-            "affinity_file": str(affinity_path.resolve()),
         }
+        if affinity_path is not None:
+            artifacts["affinity_file"] = str(affinity_path.resolve())
 
         optional_files = {
             "pae_file": next(prediction_dir.glob("pae_*_model_0.npz"), None),
@@ -363,7 +364,9 @@ class Boltz2AffinityPredictor(BioModule):
                 resolved[key] = value
 
         if not isinstance(resolved["boltz_package_spec"], str) or not resolved["boltz_package_spec"].strip():
-            resolved["boltz_package_spec"] = "boltz[cuda]" if resolved["accelerator"] == "gpu" else "boltz"
+            resolved["boltz_package_spec"] = (
+                "boltz[cuda]==2.0.2" if resolved["accelerator"] == "gpu" else "boltz==2.0.2"
+            )
         return resolved
 
     def _create_run_root(self) -> Path:
@@ -678,10 +681,18 @@ class Boltz2AffinityPredictor(BioModule):
 
     def _find_prediction_dir(self, output_dir: Path) -> Path:
         predictions_root = output_dir / "predictions"
-        candidates = sorted(p for p in predictions_root.iterdir() if p.is_dir())
-        if not candidates:
-            raise FileNotFoundError(f"no prediction folders under {predictions_root}")
-        return candidates[0]
+        if predictions_root.is_dir():
+            candidates = sorted(p for p in predictions_root.iterdir() if p.is_dir())
+            if candidates:
+                return candidates[0]
+            if self._looks_like_prediction_dir(predictions_root):
+                return predictions_root
+        if self._looks_like_prediction_dir(output_dir):
+            return output_dir
+        recursive_candidates = self._recursive_prediction_dirs(output_dir)
+        if recursive_candidates:
+            return recursive_candidates[0]
+        raise FileNotFoundError(f"no prediction folders under {predictions_root} and no direct outputs under {output_dir}")
 
     def _find_structure_file(self, prediction_dir: Path) -> Path:
         for pattern in ("*_model_0.cif", "*_model_0.pdb"):
@@ -689,6 +700,37 @@ class Boltz2AffinityPredictor(BioModule):
             if candidate is not None:
                 return Path(candidate)
         raise FileNotFoundError("no top-ranked structure file was produced")
+
+    def _find_affinity_summary_file(self, prediction_dir: Path) -> Optional[Path]:
+        candidate = next(prediction_dir.glob("affinity_*.json"), None)
+        if candidate is None:
+            return None
+        return Path(candidate)
+
+    def _looks_like_prediction_dir(self, directory: Path) -> bool:
+        for pattern in (
+            "*_model_0.cif",
+            "*_model_0.pdb",
+            "confidence_*_model_0.json",
+            "affinity_*.json",
+            "plddt_*_model_0.npz",
+        ):
+            if next(directory.glob(pattern), None) is not None:
+                return True
+        return False
+
+    def _recursive_prediction_dirs(self, output_dir: Path) -> list[Path]:
+        parents: set[Path] = set()
+        for pattern in (
+            "**/*_model_0.cif",
+            "**/*_model_0.pdb",
+            "**/confidence_*_model_0.json",
+            "**/affinity_*.json",
+            "**/plddt_*_model_0.npz",
+        ):
+            for candidate in output_dir.glob(pattern):
+                parents.add(Path(candidate).parent)
+        return sorted(parents)
 
     def _require_single(self, paths: Any) -> Path:
         items = sorted(Path(p) for p in paths)

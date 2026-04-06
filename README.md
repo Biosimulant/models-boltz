@@ -81,13 +81,39 @@ The default local paths are:
 If Boltz fails with a known corrupted-cache extraction error, the wrapper
 purges the affected cached assets and retries once automatically.
 
+## Remote Execution
+
+For BioSim remote execution on Modal, the same package is used without a
+Boltz-specific provider branch:
+
+- the package manifest pins `boltz[cuda]==2.2.1` for GPU-backed sandbox
+  dependency installs on Modal
+- remote runs force `runtime_mode: external` through manifest-declared
+  remote init overrides
+- the Boltz cache is redirected to
+  `${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz`
+- generated structure and JSON artifacts are staged back through the generic
+  remote executor artifact flow so completed runs can still serve `structure3d`
+  downloads after the sandbox exits
+
+The supported validation target for real Boltz-2 runs is Linux + NVIDIA GPU on
+Modal. Local macOS runs remain useful for smoke-testing the wrapper and example
+inputs, but they are not the release-grade validation target.
+
 ## Validation
 
 ```bash
-python scripts/validate_manifests.py
-python scripts/check_entrypoints.py
+./.venv-check/bin/python scripts/validate_manifests.py
+./.venv-check/bin/python scripts/check_entrypoints.py
 bash scripts/check_public_boundary.sh
-pytest
+./.venv-check/bin/pytest -q models/boltz-boltz2-affinity-predictor/tests
+```
+
+Remote Modal smoke:
+
+```bash
+cd /Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/bsim-platform/backend
+BIOSIM_MODAL_RUN_REAL_SMOKE=1 ./.venv/bin/pytest -q tests/test_executor_remote_overrides.py -k modal_real_boltz_smoke
 ```
 
 ## License
