@@ -282,12 +282,12 @@ class Boltz2AffinityPredictor(BioModule):
         confidence_summary = self._load_json(confidence_path)
         affinity_summary = self._load_json(affinity_path) if affinity_path is not None else {}
         artifacts = {
-            "prediction_dir": str(prediction_dir.resolve()),
-            "structure_file": str(structure_path.resolve()),
-            "confidence_file": str(confidence_path.resolve()),
+            "prediction_dir": str(prediction_dir),
+            "structure_file": str(structure_path),
+            "confidence_file": str(confidence_path),
         }
         if affinity_path is not None:
-            artifacts["affinity_file"] = str(affinity_path.resolve())
+            artifacts["affinity_file"] = str(affinity_path)
 
         optional_files = {
             "pae_file": next(prediction_dir.glob("pae_*_model_0.npz"), None),
@@ -296,10 +296,10 @@ class Boltz2AffinityPredictor(BioModule):
         }
         for key, maybe_path in optional_files.items():
             if maybe_path is not None:
-                artifacts[key] = str(Path(maybe_path).resolve())
+                artifacts[key] = str(Path(maybe_path))
 
         metadata["status"] = "completed"
-        metadata["prediction_dir"] = str(prediction_dir.resolve())
+        metadata["prediction_dir"] = str(prediction_dir)
         self._cached_payloads = {
             "affinity_summary": affinity_summary,
             "confidence_summary": confidence_summary,
@@ -328,7 +328,9 @@ class Boltz2AffinityPredictor(BioModule):
         if not isinstance(structure_file, str) or not structure_file:
             return None
 
-        structure_path = Path(structure_file).expanduser().resolve()
+        structure_path = Path(structure_file).expanduser()
+        if not structure_path.is_absolute():
+            structure_path = Path.cwd() / structure_path
         structure_format = self._structure_format(structure_path)
         if structure_format is None:
             return None

@@ -163,6 +163,43 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert visuals[1]["data"]["columns"] == ["Metric", "Value"]
 
 
+def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim, tmp_path):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+
+    module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "runtime"))
+
+    prediction_dir = tmp_path / "runs" / ".." / "artifacts" / "request"
+    prediction_dir.mkdir(parents=True, exist_ok=True)
+    structure_file = prediction_dir / "request_model_0.cif"
+    structure_file.write_text("data_mock\n", encoding="utf-8")
+    confidence_file = prediction_dir / "confidence_request_model_0.json"
+    confidence_file.write_text("{}", encoding="utf-8")
+    affinity_file = prediction_dir / "affinity_request.json"
+    affinity_file.write_text("{}", encoding="utf-8")
+    plddt_file = prediction_dir / "plddt_request_model_0.npz"
+    plddt_file.write_text("placeholder", encoding="utf-8")
+
+    module._cached_payloads = {
+        "run_metadata": {"status": "completed"},
+        "structure_artifacts": {
+            "prediction_dir": str(prediction_dir),
+            "structure_file": str(structure_file),
+            "confidence_file": str(confidence_file),
+            "affinity_file": str(affinity_file),
+            "plddt_file": str(plddt_file),
+        },
+        "confidence_summary": {"confidence_score": 0.91},
+        "affinity_summary": {"affinity_probability_binary": 0.97},
+    }
+
+    visuals = module.visualize()
+    assert visuals is not None
+    assert visuals[0]["data"]["source"]["path"] == str(structure_file)
+    assert "/../" in visuals[0]["data"]["source"]["path"]
+    assert module._cached_payloads["structure_artifacts"]["prediction_dir"] == str(prediction_dir)
+    assert "/../" in module._cached_payloads["structure_artifacts"]["prediction_dir"]
+
+
 def test_advance_emits_progress_events_for_long_steps(biosim, tmp_path, monkeypatch, capsys):
     from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
     from biosim.signals import BioSignal
