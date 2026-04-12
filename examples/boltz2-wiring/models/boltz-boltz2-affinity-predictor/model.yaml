@@ -1,0 +1,19 @@
+schema_version: "2.0"
+title: "Boltz: Boltz2AffinityPredictor"
+description: "Wraps the native Boltz-2 CLI for single protein and single ligand affinity-focused structural runs."
+package: "Biosimulant/models-boltz:models/boltz-boltz2-affinity-predictor/model.yaml"
+version: "7651a2829b60b601aef619a028a589b63d414c92"
+standard: other
+tags: [boltz, structural-biology, affinity, protein-ligand]
+authors: ["Biosimulant Team"]
+biosim:
+  entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
+runtime:
+  dependencies:
+    packages:
+      - boltz[cuda]==2.0.2
+      - pyyaml==6.0.2
+  remote:
+    init_kwargs:
+      runtime_mode: external
+      cache_dir: "${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz"
