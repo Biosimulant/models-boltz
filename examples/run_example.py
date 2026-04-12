@@ -54,10 +54,10 @@ def main() -> int:
     config_path = args.config.resolve() if args.config else (root / args.example / "config.yaml")
     config = _load_config(config_path)
     model_cfg = config["model"]
-    manifest_path = model_cfg.get("manifest_path")
-    if not isinstance(manifest_path, str) or not manifest_path.strip():
-        raise ValueError("model.manifest_path is required")
-    model_root = root.parent / Path(manifest_path).parent
+    model_path = model_cfg.get("path")
+    if not isinstance(model_path, str) or not model_path.strip():
+        raise ValueError("model.path is required")
+    model_root = (config_path.parent / Path(model_path)).resolve()
     if str(model_root) not in sys.path:
         sys.path.insert(0, str(model_root))
     class_path = model_cfg["class"]

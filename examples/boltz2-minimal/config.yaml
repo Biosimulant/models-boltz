@@ -1,10 +1,10 @@
 example_name: boltz2-minimal
 description: Real Boltz-2 protein-ligand affinity example based on the upstream Boltz affinity example, using managed runtime installation and server-side MSA generation.
 source:
-  upstream_repo: https://github.com/jwohlwend/boltz
+  upstream_source_url: https://github.com/jwohlwend/boltz
   upstream_example: examples/affinity.yaml
 model:
-  manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
+  path: ../../models/boltz-boltz2-affinity-predictor
   class: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
   parameters:
     runtime_mode: managed

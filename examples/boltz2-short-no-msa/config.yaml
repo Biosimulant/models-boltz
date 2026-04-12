@@ -1,12 +1,12 @@
 example_name: boltz2-short-no-msa
 description: Real short Boltz-2 protein-ligand affinity example based on the upstream prot_no_msa and affinity examples, intended as the fastest local smoke path.
 source:
-  upstream_repo: https://github.com/jwohlwend/boltz
+  upstream_source_url: https://github.com/jwohlwend/boltz
   upstream_examples:
     - examples/prot_no_msa.yaml
     - examples/affinity.yaml
 model:
-  manifest_path: models/boltz-boltz2-affinity-predictor/model.yaml
+  path: ../../models/boltz-boltz2-affinity-predictor
   class: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
   parameters:
     runtime_mode: managed

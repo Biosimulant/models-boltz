@@ -98,13 +98,13 @@ serves the structure through the artifact endpoint instead.
 ## Examples
 
 See:
-- [`examples/boltz2-minimal`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-minimal)
-- [`examples/boltz2-explicit-msa`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-explicit-msa)
-- [`examples/boltz2-wiring`](/Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/models/models-boltz/examples/boltz2-wiring)
+- [`examples/boltz2-minimal`](../../examples/boltz2-minimal)
+- [`examples/boltz2-explicit-msa`](../../examples/boltz2-explicit-msa)
+- [`examples/boltz2-wiring`](../../examples/boltz2-wiring)
 
 Remote smoke command:
 
 ```bash
-cd /Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/bsim-platform/backend
+cd ../../../bsim-platform/backend
 BIOSIM_MODAL_RUN_REAL_SMOKE=1 ./.venv/bin/pytest -q tests/test_executor_remote_overrides.py -k modal_real_boltz_smoke
 ```

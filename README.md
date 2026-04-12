@@ -112,7 +112,7 @@ bash scripts/check_public_boundary.sh
 Remote Modal smoke:
 
 ```bash
-cd /Volumes/dem-ssd/imp/projects/Nitoons/Biosimulant/bsim-platform/backend
+cd ../bsim-platform/backend
 BIOSIM_MODAL_RUN_REAL_SMOKE=1 ./.venv/bin/pytest -q tests/test_executor_remote_overrides.py -k modal_real_boltz_smoke
 ```
 

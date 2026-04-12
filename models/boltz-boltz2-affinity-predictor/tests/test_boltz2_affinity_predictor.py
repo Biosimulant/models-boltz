@@ -568,8 +568,8 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     assert explicit["model"]["inputs"]["msa_path"] == "./assets/seq1.a3m"
     assert short_no_msa["model"]["inputs"]["msa_path"] == "empty"
     assert short_no_msa["model"]["parameters"]["sampling_steps"] == 1
-    assert minimal["model"]["manifest_path"] == "models/boltz-boltz2-affinity-predictor/model.yaml"
-    assert wiring["models"][0]["manifest_path"] == "models/boltz-boltz2-affinity-predictor/model.yaml"
+    assert minimal["model"]["path"] == "../../models/boltz-boltz2-affinity-predictor"
+    assert wiring["models"][0]["path"] == "../../models/boltz-boltz2-affinity-predictor"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
     assert "default_protein_sequence" in wiring["models"][0]["parameters"]
 

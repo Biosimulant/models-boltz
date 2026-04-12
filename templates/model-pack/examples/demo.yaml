@@ -2,9 +2,8 @@ schema_version: "2.0"
 title: "Example: Boltz Template Wiring"
 description: "Placeholder example showing how a copied Boltz-family model would be referenced in a BioSim space."
 models:
-  - repo: Biosimulant/models-boltz
+  - path: ../../models/example-boltz-module
     alias: boltz_model
-    manifest_path: models/example-boltz-module/model.yaml
     parameters: {}
 runtime:
   duration: 0.01

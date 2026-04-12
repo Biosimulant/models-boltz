@@ -25,9 +25,8 @@ print(module.get_outputs())
 
 ```yaml
 models:
-  - repo: Biosimulant/models-boltz
+  - path: ../../models/example-boltz-module
     alias: example_boltz
-    manifest_path: models/example-boltz-module/model.yaml
     parameters: {}
 ```
 

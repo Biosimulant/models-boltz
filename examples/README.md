@@ -20,8 +20,8 @@ module in this repository.
 - best local smoke-test path for CPU-only validation
 
 ### `boltz2-wiring`
-- a `space.yaml` with real constructor defaults so the example is not just a
-  placeholder manifest reference
+- a fully owned checked-in `space.yaml` source example for the portable
+  Boltz-2 remote package, not just a placeholder manifest reference
 
 ## Exact Commands
 
@@ -62,8 +62,11 @@ python3 examples/run_example.py boltz2-minimal \
 - These examples use real upstream Boltz example inputs rather than placeholders.
 - They stay aligned with the current `Boltz2AffinityPredictor` constructor,
   input ports, and output ports.
+- `boltz2-wiring` is the checked-in source-of-truth for the owned remote
+  example space that the export helper packages into a `.bsispace`.
 - The first real run bootstraps a managed local Boltz runtime unless you
   explicitly switch to `runtime_mode: external`.
-- CPU is used in the checked-in example configs for portability.
+- The standalone run-example configs default to CPU for portability, but the
+  owned remote space example is configured for GPU-backed remote execution.
 - `boltz2-short-no-msa` is the most practical end-to-end smoke example on a local machine.
 - The two affinity-length examples may still take a long time on CPU.
