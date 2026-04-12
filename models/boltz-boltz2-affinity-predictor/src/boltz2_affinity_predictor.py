@@ -13,6 +13,8 @@ import sys
 import tempfile
 import tarfile
 import hashlib
+import threading
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -74,6 +76,7 @@ class Boltz2AffinityPredictor(BioModule):
         override: bool = True,
         command_timeout_s: float = 3600.0,
         runtime_setup_timeout_s: float = 1800.0,
+        progress_heartbeat_s: float = 30.0,
         min_dt: float = 0.01,
     ) -> None:
         self.min_dt = min_dt
@@ -94,6 +97,7 @@ class Boltz2AffinityPredictor(BioModule):
         self.override = override
         self.command_timeout_s = command_timeout_s
         self.runtime_setup_timeout_s = runtime_setup_timeout_s
+        self.progress_heartbeat_s = max(0.0, float(progress_heartbeat_s))
 
         repo_root = Path(__file__).resolve().parents[3]
         self.runtime_dir = (
@@ -158,6 +162,7 @@ class Boltz2AffinityPredictor(BioModule):
             self._last_signature = None
 
     def advance_to(self, t: float) -> None:
+        self._emit_progress("inputs", "Validating Boltz-2 inputs")
         resolved = self._resolved_options()
         signature = json.dumps(
             {
@@ -171,27 +176,35 @@ class Boltz2AffinityPredictor(BioModule):
         )
 
         if signature == self._last_signature and self._cached_payloads:
+            self._emit_progress("cache", "Reusing cached Boltz-2 outputs for unchanged inputs")
             self._emit_outputs(t)
             return
 
         if not self._protein_sequence:
-            self._set_error_payload("protein_sequence input is required")
+            error = "protein_sequence input is required"
+            self._emit_progress("error", error)
+            self._set_error_payload(error)
             self._last_signature = signature
             self._emit_outputs(t)
             return
         if not self._ligand_smiles:
-            self._set_error_payload("ligand_smiles input is required")
+            error = "ligand_smiles input is required"
+            self._emit_progress("error", error)
+            self._set_error_payload(error)
             self._last_signature = signature
             self._emit_outputs(t)
             return
         if not resolved["use_msa_server"] and not self._msa_path:
-            self._set_error_payload("msa_path is required unless use_msa_server is enabled")
+            error = "msa_path is required unless use_msa_server is enabled"
+            self._emit_progress("error", error)
+            self._set_error_payload(error)
             self._last_signature = signature
             self._emit_outputs(t)
             return
 
         run_root = self._create_run_root()
         request_path = run_root / "request.yaml"
+        self._emit_progress("inputs", "Writing Boltz-2 request payload")
         request_path.write_text(self._build_request_document(resolved), encoding="utf-8")
         output_dir = run_root / "output"
 
@@ -214,11 +227,14 @@ class Boltz2AffinityPredictor(BioModule):
         }
 
         try:
+            self._emit_progress("runtime", "Preparing Boltz-2 runtime")
             resolved_executable = self._resolve_boltz_executable(run_root, resolved, metadata)
+            self._emit_progress("runtime", "Inspecting and repairing Boltz cache if needed")
             self._prepare_cache_dir(metadata)
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
             metadata["error"] = f"failed to prepare Boltz runtime: {exc}"
+            self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
             self._last_signature = signature
             self._emit_outputs(t)
@@ -232,6 +248,7 @@ class Boltz2AffinityPredictor(BioModule):
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
             metadata["error"] = f"failed to execute boltz: {exc}"
+            self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
             self._last_signature = signature
             self._emit_outputs(t)
@@ -240,12 +257,14 @@ class Boltz2AffinityPredictor(BioModule):
         if completed.returncode != 0:
             metadata["status"] = "error"
             metadata["error"] = "boltz predict returned a non-zero exit code"
+            self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
             self._last_signature = signature
             self._emit_outputs(t)
             return
 
         try:
+            self._emit_progress("postprocess", "Collecting Boltz-2 prediction outputs")
             prediction_dir = self._find_prediction_dir(output_dir)
             confidence_path = self._require_single(prediction_dir.glob("confidence_*_model_0.json"))
             affinity_path = self._find_affinity_summary_file(prediction_dir)
@@ -253,11 +272,13 @@ class Boltz2AffinityPredictor(BioModule):
         except Exception as exc:  # noqa: BLE001
             metadata["status"] = "error"
             metadata["error"] = f"expected Boltz outputs were not found: {exc}"
+            self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
             self._last_signature = signature
             self._emit_outputs(t)
             return
 
+        self._emit_progress("outputs", "Publishing Boltz-2 structure and summary artifacts")
         confidence_summary = self._load_json(confidence_path)
         affinity_summary = self._load_json(affinity_path) if affinity_path is not None else {}
         artifacts = {
@@ -286,6 +307,7 @@ class Boltz2AffinityPredictor(BioModule):
             "run_metadata": metadata,
         }
         self._last_signature = signature
+        self._emit_progress("completed", "Boltz-2 outputs are ready")
         self._emit_outputs(t)
 
     def get_outputs(self) -> Dict[str, BioSignal]:
@@ -467,6 +489,7 @@ class Boltz2AffinityPredictor(BioModule):
             if not resolved_exec:
                 raise FileNotFoundError(f"could not find boltz executable: {self.boltz_executable}")
             metadata["resolved_boltz_executable"] = str(resolved_exec)
+            self._emit_progress("runtime", f"Using external Boltz executable at {resolved_exec}")
             return str(resolved_exec)
         if runtime_mode != "managed":
             raise ValueError(f"unsupported runtime_mode: {resolved['runtime_mode']}")
@@ -489,9 +512,18 @@ class Boltz2AffinityPredictor(BioModule):
         if venv_python.exists() and not self._python_supports_boltz(venv_python):
             shutil.rmtree(runtime_root)
             metadata["runtime_recreated"] = True
+            self._emit_progress("runtime", "Recreating incompatible managed Boltz runtime")
 
         if not venv_python.exists():
-            self._run_setup_command([str(base_python), "-m", "venv", str(runtime_root)], run_root, metadata)
+            self._run_setup_command(
+                [str(base_python), "-m", "venv", str(runtime_root)],
+                run_root,
+                metadata,
+                phase="runtime",
+                start_message="Creating managed Boltz runtime environment",
+                heartbeat_message="Still creating the managed Boltz runtime environment",
+                completion_message="Managed Boltz runtime environment is ready",
+            )
             metadata["runtime_bootstrapped"] = True
 
         if bool(resolved["upgrade_runtime"]) or not boltz_bin.exists():
@@ -499,13 +531,23 @@ class Boltz2AffinityPredictor(BioModule):
                 [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
                 run_root,
                 metadata,
+                phase="runtime",
+                start_message="Upgrading pip inside the managed Boltz runtime",
+                heartbeat_message="Still upgrading pip inside the managed Boltz runtime",
+                completion_message="Managed Boltz runtime pip is up to date",
             )
             self._run_setup_command(
                 [str(venv_python), "-m", "pip", "install", str(resolved["boltz_package_spec"])],
                 run_root,
                 metadata,
+                phase="runtime",
+                start_message="Installing Boltz runtime dependencies",
+                heartbeat_message="Still installing the Boltz runtime dependencies",
+                completion_message="Boltz runtime dependencies are installed",
             )
             metadata["runtime_bootstrapped"] = True
+        else:
+            self._emit_progress("runtime", "Reusing cached managed Boltz runtime")
 
         if not boltz_bin.exists():
             raise FileNotFoundError(f"managed Boltz executable was not created at {boltz_bin}")
@@ -531,6 +573,8 @@ class Boltz2AffinityPredictor(BioModule):
             if checkpoint_path.exists() and checkpoint_path.stat().st_size == 0:
                 checkpoint_path.unlink(missing_ok=True)
                 metadata["cache_repaired"] = True
+        if metadata["cache_repaired"]:
+            self._emit_progress("runtime", "Repaired corrupted or partial Boltz cache entries")
 
     def _tar_is_readable(self, tar_path: Path) -> bool:
         try:
@@ -552,9 +596,11 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["stdout"] = completed.stdout
             metadata["stderr"] = completed.stderr
             metadata["returncode"] = completed.returncode
+            self._emit_progress("inference", "Boltz-2 prediction finished")
             return completed
 
         if self._should_retry_after_cache_error(completed) and self.cache_dir is not None:
+            self._emit_progress("runtime", "Detected corrupted Boltz cache output, purging cache and retrying once")
             self._purge_corrupted_cache()
             metadata["cache_repaired"] = True
             metadata["retry_count"] = 1
@@ -562,6 +608,8 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["stdout"] = f"{completed.stdout}\n[retry-after-cache-repair]\n{retry.stdout}".strip()
             metadata["stderr"] = f"{completed.stderr}\n[retry-after-cache-repair]\n{retry.stderr}".strip()
             metadata["returncode"] = retry.returncode
+            if retry.returncode == 0:
+                self._emit_progress("inference", "Boltz-2 prediction finished after cache repair")
             return retry
 
         metadata["stdout"] = completed.stdout
@@ -574,13 +622,14 @@ class Boltz2AffinityPredictor(BioModule):
         command: list[str],
         run_root: Path,
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            command,
+        return self._run_command_with_progress(
+            command=command,
             cwd=run_root,
-            capture_output=True,
-            text=True,
             timeout=self.command_timeout_s,
-            check=False,
+            phase="inference",
+            start_message="Launching boltz predict",
+            heartbeat_message="Boltz-2 prediction is still running",
+            completion_message="boltz predict finished",
         )
 
     def _should_retry_after_cache_error(self, completed: subprocess.CompletedProcess[str]) -> bool:
@@ -658,21 +707,86 @@ class Boltz2AffinityPredictor(BioModule):
         command: list[str],
         run_root: Path,
         metadata: Dict[str, Any],
+        *,
+        phase: str = "runtime",
+        start_message: Optional[str] = None,
+        heartbeat_message: Optional[str] = None,
+        completion_message: Optional[str] = None,
     ) -> None:
         metadata["runtime_setup_commands"].append(command)
-        completed = subprocess.run(
-            command,
+        completed = self._run_command_with_progress(
+            command=command,
             cwd=run_root,
-            capture_output=True,
-            text=True,
             timeout=self.runtime_setup_timeout_s,
-            check=False,
+            phase=phase,
+            start_message=start_message or f"Running setup command: {' '.join(command[:3])}",
+            heartbeat_message=heartbeat_message or "Still running setup command",
+            completion_message=completion_message or "Setup command finished",
         )
         if completed.returncode != 0:
             raise RuntimeError(
                 "runtime setup command failed: "
                 f"{command} :: stdout={completed.stdout!r} stderr={completed.stderr!r}"
             )
+
+    def _run_command_with_progress(
+        self,
+        *,
+        command: list[str],
+        cwd: Path,
+        timeout: float,
+        phase: str,
+        start_message: str,
+        heartbeat_message: str,
+        completion_message: str,
+    ) -> subprocess.CompletedProcess[str]:
+        self._emit_progress(phase, start_message)
+
+        outcome: Dict[str, subprocess.CompletedProcess[str]] = {}
+        error: Dict[str, BaseException] = {}
+
+        def runner() -> None:
+            try:
+                outcome["completed"] = subprocess.run(
+                    command,
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
+            except BaseException as exc:  # noqa: BLE001
+                error["exc"] = exc
+
+        thread = threading.Thread(target=runner, daemon=True)
+        thread.start()
+
+        started_at = time.monotonic()
+        tick = 0
+        while thread.is_alive():
+            join_timeout = self.progress_heartbeat_s or None
+            thread.join(timeout=join_timeout)
+            if not thread.is_alive():
+                break
+            tick += 1
+            elapsed = int(time.monotonic() - started_at)
+            self._emit_progress(
+                phase,
+                f"{heartbeat_message} ({elapsed}s elapsed)",
+                tick=tick,
+                duration=float(elapsed),
+            )
+
+        thread.join()
+        if "exc" in error:
+            raise error["exc"]
+
+        completed = outcome["completed"]
+        if completed.returncode == 0:
+            self._emit_progress(phase, completion_message)
+        else:
+            self._emit_progress(phase, f"{completion_message} (exit code {completed.returncode})")
+        return completed
 
     def _venv_path(self, runtime_root: Path, executable: str) -> Path:
         bin_dir = "Scripts" if os.name == "nt" else "bin"
@@ -804,6 +918,13 @@ class Boltz2AffinityPredictor(BioModule):
             "structure_artifacts": {},
             "run_metadata": payload,
         }
+
+    def _emit_progress(self, phase: str, message: str, **payload: Any) -> None:
+        event: Dict[str, Any] = {"phase": phase, "message": message}
+        for key, value in payload.items():
+            if value is not None:
+                event[key] = value
+        print(f"BSIM_PROGRESS:{json.dumps(event, sort_keys=True)}", flush=True)
 
     def _emit_outputs(self, t: float) -> None:
         source = getattr(self, "_world_name", self.__class__.__name__)

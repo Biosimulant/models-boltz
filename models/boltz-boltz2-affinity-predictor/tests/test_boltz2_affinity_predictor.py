@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 import pytest
 import yaml
@@ -160,6 +161,68 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert Path(visuals[0]["data"]["source"]["path"]).name == "request_model_0.cif"
     assert visuals[1]["render"] == "table"
     assert visuals[1]["data"]["columns"] == ["Metric", "Value"]
+
+
+def test_advance_emits_progress_events_for_long_steps(biosim, tmp_path, monkeypatch, capsys):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+    from biosim.signals import BioSignal
+
+    def fake_run(command, cwd, capture_output, text, timeout, check):  # noqa: ARG001
+        command = [str(item) for item in command]
+        run_root = Path(cwd)
+
+        if "-c" in command:
+            return subprocess.CompletedProcess(command, 0, stdout="3.12\n", stderr="")
+        if "-m" in command and "venv" in command:
+            runtime_root = Path(command[-1])
+            (runtime_root / "bin").mkdir(parents=True, exist_ok=True)
+            (runtime_root / "bin" / "python").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="venv", stderr="")
+        if "-m" in command and "pip" in command and "install" in command:
+            if any(item.startswith("boltz") for item in command):
+                runtime_python = Path(command[0])
+                runtime_root = runtime_python.parent.parent
+                (runtime_root / "bin" / "boltz").write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="pip", stderr="")
+
+        time.sleep(0.03)
+        prediction_dir = run_root / "output" / "predictions" / "request"
+        prediction_dir.mkdir(parents=True, exist_ok=True)
+        (prediction_dir / "request_model_0.cif").write_text("data_mock\n", encoding="utf-8")
+        (prediction_dir / "confidence_request_model_0.json").write_text(
+            json.dumps({"confidence_score": 0.91, "ptm": 0.82}),
+            encoding="utf-8",
+        )
+        (prediction_dir / "affinity_request.json").write_text(
+            json.dumps({"affinity_probability_binary": 0.97}),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    module = Boltz2AffinityPredictor(
+        work_dir=str(tmp_path),
+        runtime_dir=str(tmp_path / "managed-runtime"),
+        use_msa_server=True,
+        progress_heartbeat_s=0.01,
+    )
+    _set_required_inputs(module, BioSignal)
+
+    module.advance_to(0.5)
+    captured = capsys.readouterr().out.splitlines()
+    progress_events = [
+        json.loads(line.removeprefix("BSIM_PROGRESS:"))
+        for line in captured
+        if line.startswith("BSIM_PROGRESS:")
+    ]
+
+    phases = {event["phase"] for event in progress_events}
+    assert {"inputs", "runtime", "inference", "postprocess", "outputs", "completed"} <= phases
+    assert any(
+        event["phase"] == "inference" and "still running" in event["message"].lower()
+        for event in progress_events
+    )
 
 
 def test_runtime_bootstrap_failure_surfaces_metadata(biosim, tmp_path, monkeypatch):
@@ -569,7 +632,7 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     assert short_no_msa["model"]["inputs"]["msa_path"] == "empty"
     assert short_no_msa["model"]["parameters"]["sampling_steps"] == 1
     assert minimal["model"]["path"] == "../../models/boltz-boltz2-affinity-predictor"
-    assert wiring["models"][0]["path"] == "../../models/boltz-boltz2-affinity-predictor"
+    assert wiring["models"][0]["path"] == "models/boltz-boltz2-affinity-predictor"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
     assert "default_protein_sequence" in wiring["models"][0]["parameters"]
 
