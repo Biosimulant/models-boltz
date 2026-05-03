@@ -15,7 +15,11 @@ The lab opens as a small canvas with one Boltz-2 node and a run-results panel. W
 - a confidence summary with pTM, ipTM, and pLDDT bands for the top-ranked prediction,
 - run metadata with the truncated Boltz stdout/stderr and the resolved output paths.
 
-Screenshots will be added under `assets/` after the first published run produces them.
+The first screenshot shows the canvas and results panel with the interactive 3D complex structure and confidence annotations. The second scrolls down to the same run's confidence, affinity, and summary-table metrics.
+
+![Boltz2 affinity lab canvas with predicted protein-ligand complex structure](assets/boltz2-affinity-structure-results.png)
+
+![Boltz2 affinity confidence, affinity, and summary metrics](assets/boltz2-affinity-summary-metrics.png)
 
 ## How to Read the Visualizations
 
@@ -24,6 +28,8 @@ The structure3d view shows the predicted complex assembled from the top-ranked B
 The affinity summary reports a binding probability (dimensionless, 0 to 1) and a predicted affinity expressed as pIC50. Higher pIC50 is a stronger predicted bind. Treat both as Boltz-2 model outputs, not experimental measurements: they are useful for ranking related candidates against the same target, less useful as absolute numbers.
 
 The confidence summary captures Boltz's internal confidence bands. pTM and ipTM track global and interface fold confidence (0 to 1, higher is better). pLDDT is per-residue confidence (0 to 100, higher is better). Low ipTM with reasonable pTM usually means the protein fold is fine but the ligand placement is uncertain.
+
+In the screenshot run, the top-ranked prediction reports high confidence metrics for the default protein-ligand pair: confidence score about 0.92, pTM about 0.93, ipTM about 0.91, and complex pLDDT about 0.92. The affinity table reports predicted affinity about 2.18 pIC50 with binder probability about 0.54.
 
 The run metadata records which Boltz version executed, the resolved output directory, the truncated stdout/stderr from the Boltz CLI, and `status: ok` or `status: error` so a failed run is still inspectable.
 

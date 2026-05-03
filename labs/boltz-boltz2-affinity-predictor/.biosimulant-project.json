@@ -1,8 +1,9 @@
 {
   "schema_version": "1",
-  "local_id": "aa30e358-7fcb-4619-b521-2c0ef5d5d085",
+  "local_id": "076bb733-183b-473e-97ec-5ecb067b3756",
   "kind": "lab",
   "source": "local",
-  "hub_id": "7d65d220-af59-4bf4-9f07-cf5053232cd9",
-  "created_at": "2026-05-02 18:04:11"
+  "hub_id": "64c7f06d-f307-4169-b600-1e5dc080f407",
+  "created_at": "2026-05-03 22:09:44",
+  "package_name": "local/Boltz__Boltz2AffinityPredictor_Lab"
 }
