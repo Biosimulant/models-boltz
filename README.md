@@ -1,5 +1,8 @@
 # models-boltz
 
+> Storage-only repo: each former root model now lives in `labs/<slug>/model/` and is wrapped by
+> `labs/<slug>/lab.yaml`. This repo has no repo-level import catalog and no composed labs at the root.
+
 Curated collection of **Boltz-family biomolecular interaction models** for the
 **biosim** platform.
 
@@ -16,9 +19,9 @@ This repo is distinct from
 
 ## What's Inside
 
-### Models
+### Wrapper Sublabs
 
-| Model | Description |
+| Sublab | Description |
 |---|---|
 | `boltz-boltz2-affinity-predictor` | Native Boltz-2 subprocess wrapper that predicts structure, confidence, and affinity for a single protein plus single ligand workflow. |
 
@@ -54,7 +57,7 @@ The initial Boltz-2 model:
 The repo includes three examples under [`examples/`](examples):
 - `boltz2-minimal` for a server-side MSA workflow
 - `boltz2-explicit-msa` for a provided MSA path workflow
-- `boltz2-wiring` for a BioSim `space.yaml` wiring example
+- `boltz2-wiring` for a BioSim `lab.yaml` wiring example
 
 See [`examples/README.md`](examples/README.md) for the example inventory.
 

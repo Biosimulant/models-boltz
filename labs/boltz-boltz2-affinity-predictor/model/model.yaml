@@ -1,0 +1,115 @@
+schema_version: "2.0"
+title: "Boltz: Boltz2AffinityPredictor"
+description: "Wraps the native Boltz-2 CLI for single protein and single ligand affinity-focused structural runs."
+package: "Biosimulant/models-boltz:labs/boltz-boltz2-affinity-predictor/model/model.yaml"
+version: "7651a2829b60b601aef619a028a589b63d414c92"
+standard: other
+tags: [boltz, structural-biology, affinity, protein-ligand]
+authors: ["Biosimulant Team"]
+biosim:
+  communication_step: 0.01
+  entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
+runtime:
+  dependencies:
+    packages:
+      - boltz[cuda]==2.0.2
+      - pyyaml==6.0.2
+  remote:
+    init_kwargs:
+      runtime_mode: external
+      cache_dir: "${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz"
+parameters:
+  - name: default_protein_sequence
+    value: null
+    description: "Fallback amino-acid sequence used when the protein_sequence input signal is not wired."
+  - name: default_ligand_smiles
+    value: null
+    description: "Fallback SMILES string used when the ligand_smiles input signal is not wired."
+  - name: default_msa_path
+    value: null
+    description: "Optional fallback path to a pre-computed MSA (.a3m). When null and use_msa_server is true, Boltz queries the configured MSA server."
+  - name: default_run_options
+    value: {}
+    description: "Default Boltz run options merged onto any run_options input signal."
+  - name: boltz_executable
+    value: "boltz"
+    description: "Name of the Boltz CLI binary to invoke. Override only if the runtime exposes Boltz under a different name."
+  - name: runtime_mode
+    value: "managed"
+    description: "managed | external. Managed installs Boltz into a local venv on first run; external assumes the runtime image already provides it."
+  - name: runtime_python
+    value: null
+    description: "Optional python interpreter to use for the managed runtime install. Defaults to the platform's bundled python when null."
+  - name: boltz_package_spec
+    value: null
+    description: "Optional pip spec for managed-runtime installs. Defaults to the version pinned in runtime.dependencies.packages."
+  - name: upgrade_runtime
+    value: false
+    description: "Force a reinstall of the managed Boltz runtime even if it is already cached."
+  - name: accelerator
+    value: "gpu"
+    description: "gpu | cpu. Boltz-2 is GPU-bound for any non-trivial input. CPU mode is for plumbing tests only."
+  - name: devices
+    value: 1
+    min: 1
+    description: "Number of accelerator devices."
+  - name: use_msa_server
+    value: false
+    description: "If true, Boltz fetches MSAs from the configured server. Required when default_msa_path is unset."
+  - name: output_format
+    value: "mmcif"
+    description: "Boltz output format. mmcif | pdb."
+  - name: override
+    value: true
+    description: "Overwrite existing Boltz output directory if present."
+  - name: recycling_steps
+    value: 3
+    min: 1
+    description: "Number of structure-recycling iterations."
+  - name: sampling_steps
+    value: 200
+    min: 1
+    description: "Diffusion sampling steps per pose."
+  - name: diffusion_samples
+    value: 1
+    min: 1
+    description: "Number of diffusion samples per run."
+  - name: command_timeout_s
+    value: 3600.0
+    min: 1.0
+    units: "s"
+    description: "Timeout for any single Boltz CLI invocation."
+  - name: runtime_setup_timeout_s
+    value: 1800.0
+    min: 1.0
+    units: "s"
+    description: "Timeout for the managed-runtime install step."
+  - name: progress_heartbeat_s
+    value: 30.0
+    min: 0.0
+    units: "s"
+    description: "Interval between BSIM_PROGRESS heartbeat events while Boltz is running."
+  - name: integration_step
+    value: 0.01
+    min: 0.001
+    units: "s"
+    description: "BioWorld integration step. Boltz is event-driven so this only paces the wrapper."
+io:
+  inputs:
+    - name: protein_sequence
+      description: "Amino-acid sequence string. Overrides default_protein_sequence when present."
+    - name: ligand_smiles
+      description: "SMILES string for the ligand. Overrides default_ligand_smiles when present."
+    - name: msa_path
+      description: "Optional path to a pre-computed MSA (.a3m). Overrides default_msa_path when present."
+    - name: run_options
+      description: "Boltz options dict merged onto default_run_options."
+  outputs:
+    - name: affinity_summary
+      description: "Parsed Boltz affinity summary for the latest run (binding probability, predicted affinity in pIC50)."
+    - name: confidence_summary
+      description: "Parsed Boltz confidence summary for the top-ranked prediction (pTM, ipTM, pLDDT)."
+    - name: structure_artifacts
+      description: "Absolute paths to the latest Boltz output artifacts (mmCIF or PDB structure files)."
+    - name: run_metadata
+      description: "Execution metadata and captured logs. payload.status='ok' on success, 'error' if validation or the Boltz CLI failed."

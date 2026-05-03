@@ -8,18 +8,19 @@ import subprocess
 import sys
 
 import pytest
+from biosim.signals import (AcceptedSignalProfile, ArraySignal, BioSignal, EventSignal, RecordSignal, ScalarSignal, SignalSpec)
 import yaml
 
 
 def _set_required_inputs(module, BioSignal, *, msa_path: str | None = None, run_options: dict | None = None):
     signals = {
-        "protein_sequence": BioSignal(source="test", name="protein_sequence", value="MKTAYIAKQRQISFVKSHFSRQ", time=0.0),
-        "ligand_smiles": BioSignal(source="test", name="ligand_smiles", value="CCO", time=0.0),
+        "protein_sequence": _make_signal(source="test", name="protein_sequence", value="MKTAYIAKQRQISFVKSHFSRQ", emitted_at=0.0, spec=None),
+        "ligand_smiles": _make_signal(source="test", name="ligand_smiles", value="CCO", emitted_at=0.0, spec=None),
     }
     if msa_path is not None:
-        signals["msa_path"] = BioSignal(source="test", name="msa_path", value=msa_path, time=0.0)
+        signals["msa_path"] = _make_signal(source="test", name="msa_path", value=msa_path, emitted_at=0.0, spec=None)
     if run_options is not None:
-        signals["run_options"] = BioSignal(source="test", name="run_options", value=run_options, time=0.0)
+        signals["run_options"] = _make_signal(source="test", name="run_options", value=run_options, emitted_at=0.0, spec=None)
     module.set_inputs(signals)
 
 
@@ -27,12 +28,12 @@ def test_instantiation(biosim, tmp_path):
     from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path))
-    assert module.min_dt > 0
+    assert module.integration_step > 0
     assert module.runtime_mode == "managed"
     assert module.cache_dir is not None
     assert module.cache_dir.name == "boltz-cache"
-    assert module.inputs() == {"protein_sequence", "ligand_smiles", "msa_path", "run_options"}
-    assert module.outputs() == {"affinity_summary", "confidence_summary", "structure_artifacts", "run_metadata"}
+    assert set(module.inputs()) == {"protein_sequence", "ligand_smiles", "msa_path", "run_options"}
+    assert set(module.outputs()) == {"affinity_summary", "confidence_summary", "structure_artifacts", "run_metadata"}
 
 
 def test_request_document_with_explicit_msa(biosim, tmp_path):
@@ -81,13 +82,13 @@ def test_missing_inputs_surface_error_metadata(biosim, tmp_path):
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), use_msa_server=True)
     module.set_inputs({
-        "ligand_smiles": BioSignal(source="test", name="ligand_smiles", value="CCO", time=0.0),
+        "ligand_smiles": _make_signal(source="test", name="ligand_smiles", value="CCO", emitted_at=0.0, spec=None),
     })
-    module.advance_to(0.1)
+    module.advance_window(0.0, 0.1)
 
     outputs = module.get_outputs()
-    assert outputs["run_metadata"].value["status"] == "error"
-    assert "protein_sequence" in outputs["run_metadata"].value["error"]
+    assert _signal_value(outputs["run_metadata"])["status"] == "error"
+    assert "protein_sequence" in _signal_value(outputs["run_metadata"])["error"]
     assert module.visualize() is None
 
 
@@ -136,17 +137,17 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     runtime_dir = tmp_path / "managed-runtime"
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(runtime_dir), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
     outputs = module.get_outputs()
-    metadata = outputs["run_metadata"].value
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["runtime_bootstrapped"] is True
     assert metadata["cache_dir"].endswith("boltz-cache")
-    assert outputs["affinity_summary"].value["affinity_probability_binary"] == 0.97
-    assert outputs["confidence_summary"].value["confidence_score"] == 0.91
-    assert Path(outputs["structure_artifacts"].value["structure_file"]).is_absolute()
-    assert Path(outputs["structure_artifacts"].value["affinity_file"]).is_absolute()
+    assert _signal_value(outputs["affinity_summary"])["affinity_probability_binary"] == 0.97
+    assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.91
+    assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).is_absolute()
+    assert Path(_signal_value(outputs["structure_artifacts"])["affinity_file"]).is_absolute()
     assert any("-m" in command and "venv" in command for command in commands)
     assert any("-m" in command and "pip" in command and any(item.startswith("boltz") for item in command) for command in commands)
     assert any("--cache" in command for command in commands if command and command[0].endswith("boltz"))
@@ -183,9 +184,9 @@ def test_runtime_bootstrap_failure_surfaces_metadata(biosim, tmp_path, monkeypat
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
-    metadata = module.get_outputs()["run_metadata"].value
+    metadata = _signal_value(module.get_outputs()["run_metadata"])
     assert metadata["status"] == "error"
     assert "prepare Boltz runtime" in metadata["error"]
 
@@ -215,9 +216,9 @@ def test_subprocess_failure_surfaces_metadata(biosim, tmp_path, monkeypatch):
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
-    metadata = module.get_outputs()["run_metadata"].value
+    metadata = _signal_value(module.get_outputs()["run_metadata"])
     assert metadata["status"] == "error"
     assert metadata["returncode"] == 3
     assert "non-zero" in metadata["error"]
@@ -271,9 +272,9 @@ def test_corrupted_cache_is_purged_and_retried_once(biosim, tmp_path, monkeypatc
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
-    metadata = module.get_outputs()["run_metadata"].value
+    metadata = _signal_value(module.get_outputs()["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["cache_repaired"] is True
     assert metadata["retry_count"] == 1
@@ -309,9 +310,9 @@ def test_missing_expected_files_becomes_error(biosim, tmp_path, monkeypatch):
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
-    metadata = module.get_outputs()["run_metadata"].value
+    metadata = _signal_value(module.get_outputs()["run_metadata"])
     assert metadata["status"] == "error"
     assert "expected Boltz outputs" in metadata["error"]
 
@@ -355,17 +356,17 @@ def test_legacy_success_layout_without_affinity_json_is_accepted(biosim, tmp_pat
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
     outputs = module.get_outputs()
-    metadata = outputs["run_metadata"].value
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
-    assert outputs["affinity_summary"].value == {}
-    assert outputs["confidence_summary"].value["confidence_score"] == 0.84
-    assert Path(outputs["structure_artifacts"].value["structure_file"]).is_absolute()
-    assert Path(outputs["structure_artifacts"].value["confidence_file"]).is_absolute()
-    assert "affinity_file" not in outputs["structure_artifacts"].value
-    assert Path(outputs["structure_artifacts"].value["plddt_file"]).is_absolute()
+    assert _signal_value(outputs["affinity_summary"]) == {}
+    assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.84
+    assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).is_absolute()
+    assert Path(_signal_value(outputs["structure_artifacts"])["confidence_file"]).is_absolute()
+    assert "affinity_file" not in _signal_value(outputs["structure_artifacts"])
+    assert Path(_signal_value(outputs["structure_artifacts"])["plddt_file"]).is_absolute()
 
 
 def test_recursive_output_layout_is_accepted(biosim, tmp_path, monkeypatch):
@@ -406,12 +407,12 @@ def test_recursive_output_layout_is_accepted(biosim, tmp_path, monkeypatch):
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.5)
+    module.advance_window(0.0, 0.5)
 
     outputs = module.get_outputs()
-    assert outputs["run_metadata"].value["status"] == "completed"
-    assert outputs["confidence_summary"].value["confidence_score"] == 0.92
-    assert Path(outputs["structure_artifacts"].value["structure_file"]).name == "affinity_model_0.cif"
+    assert _signal_value(outputs["run_metadata"])["status"] == "completed"
+    assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.92
+    assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).name == "affinity_model_0.cif"
 
 
 def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch):
@@ -455,13 +456,13 @@ def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.2)
-    module.advance_to(0.3)
+    module.advance_window(0.0, 0.2)
+    module.advance_window(0.0, 0.3)
     assert calls["predict"] == 1
 
     module.reset()
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.4)
+    module.advance_window(0.0, 0.4)
     assert calls["predict"] == 2
 
 
@@ -501,10 +502,10 @@ def test_constructor_defaults_allow_space_style_usage(biosim, tmp_path, monkeypa
         default_protein_sequence="MKTAYIAKQRQISFVKSHFSRQ",
         default_ligand_smiles="CCO",
     )
-    module.advance_to(0.1)
+    module.advance_window(0.0, 0.1)
     outputs = module.get_outputs()
-    assert outputs["run_metadata"].value["status"] == "completed"
-    assert outputs["affinity_summary"].value["affinity_probability_binary"] == 0.66
+    assert _signal_value(outputs["run_metadata"])["status"] == "completed"
+    assert _signal_value(outputs["affinity_summary"])["affinity_probability_binary"] == 0.66
 
 
 def test_managed_runtime_selects_supported_python_when_host_python_is_unsupported(biosim, tmp_path, monkeypatch):
@@ -549,27 +550,27 @@ def test_managed_runtime_selects_supported_python_when_host_python_is_unsupporte
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_to(0.1)
+    module.advance_window(0.0, 0.1)
 
-    metadata = module.get_outputs()["run_metadata"].value
+    metadata = _signal_value(module.get_outputs()["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["runtime_base_python"].endswith("python3.12")
 
 
 def test_example_files_parse_and_reference_real_interface(biosim):
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[5]
     minimal = yaml.safe_load((repo_root / "examples" / "boltz2-minimal" / "config.yaml").read_text(encoding="utf-8"))
     explicit = yaml.safe_load((repo_root / "examples" / "boltz2-explicit-msa" / "config.yaml").read_text(encoding="utf-8"))
     short_no_msa = yaml.safe_load((repo_root / "examples" / "boltz2-short-no-msa" / "config.yaml").read_text(encoding="utf-8"))
-    wiring = yaml.safe_load((repo_root / "examples" / "boltz2-wiring" / "space.yaml").read_text(encoding="utf-8"))
+    wiring = yaml.safe_load((repo_root / "examples" / "boltz2-wiring" / "lab.yaml").read_text(encoding="utf-8"))
 
     assert minimal["model"]["parameters"]["runtime_mode"] == "managed"
     assert minimal["model"]["parameters"]["use_msa_server"] is True
     assert explicit["model"]["inputs"]["msa_path"] == "./assets/seq1.a3m"
     assert short_no_msa["model"]["inputs"]["msa_path"] == "empty"
     assert short_no_msa["model"]["parameters"]["sampling_steps"] == 1
-    assert minimal["model"]["path"] == "../../models/boltz-boltz2-affinity-predictor"
-    assert wiring["models"][0]["path"] == "../../models/boltz-boltz2-affinity-predictor"
+    assert minimal["model"]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
+    assert wiring["models"][0]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
     assert "default_protein_sequence" in wiring["models"][0]["parameters"]
 
@@ -610,3 +611,58 @@ def test_real_smoke_example_runs(tmp_path):
     affinity_file = outputs["structure_artifacts"]["value"].get("affinity_file")
     if affinity_file is not None:
         assert Path(affinity_file).exists()
+
+
+def _schema_type(value):
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "str"
+    return "json"
+
+
+def _signal_value(signal):
+    value = signal.value
+    if isinstance(value, dict) and set(value.keys()) == {"payload"}:
+        return value["payload"]
+    return value
+
+
+def _generic_input_spec(description=None):
+    return SignalSpec.record(
+        schema={"payload": "json"},
+        accepted_profiles=(
+            AcceptedSignalProfile(signal_type="record", schema={"payload": "json"}),
+            AcceptedSignalProfile(signal_type="scalar"),
+        ),
+        description=description,
+    )
+
+
+def _make_signal(*, source, name, value, emitted_at, spec=None):
+    if spec is None:
+        if isinstance(value, dict):
+            spec = SignalSpec.record(schema={str(key): _schema_type(item) for key, item in value.items()})
+        elif isinstance(value, (list, tuple)):
+            spec = SignalSpec.record(schema={"payload": "json"})
+        else:
+            spec = SignalSpec.scalar(dtype=_schema_type(value))
+
+    if spec.signal_type == "scalar":
+        return ScalarSignal(source=source, name=name, value=value, emitted_at=emitted_at, spec=spec)
+    if spec.signal_type == "array":
+        return ArraySignal(source=source, name=name, value=value, emitted_at=emitted_at, spec=spec)
+    if spec.signal_type == "event":
+        event_value = value
+        if spec.schema is not None and not (isinstance(value, dict) and set(value.keys()) == set(spec.schema.keys())):
+            event_value = {"payload": value}
+        return EventSignal(source=source, name=name, value=event_value, emitted_at=emitted_at, spec=spec)
+
+    record_value = value
+    if not isinstance(value, dict) or set(value.keys()) != set((spec.schema or {}).keys()):
+        record_value = {"payload": value}
+    return RecordSignal(source=source, name=name, value=record_value, emitted_at=emitted_at, spec=spec)

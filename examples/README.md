@@ -20,7 +20,7 @@ module in this repository.
 - best local smoke-test path for CPU-only validation
 
 ### `boltz2-wiring`
-- a fully owned checked-in `space.yaml` source example for the portable
+- a fully owned checked-in `lab.yaml` source example for the portable
   Boltz-2 remote package, not just a placeholder manifest reference
 
 ## Exact Commands
@@ -63,7 +63,7 @@ python3 examples/run_example.py boltz2-minimal \
 - They stay aligned with the current `Boltz2AffinityPredictor` constructor,
   input ports, and output ports.
 - `boltz2-wiring` is the checked-in source-of-truth for the owned remote
-  example space that the export helper packages into a `.bsispace`.
+  example space that the export helper packages into a `.bsilab`.
 - The first real run bootstraps a managed local Boltz runtime unless you
   explicitly switch to `runtime_mode: external`.
 - The standalone run-example configs default to CPU for portability, but the

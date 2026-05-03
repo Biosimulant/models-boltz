@@ -17,7 +17,7 @@ DESKTOP_SRC_TAURI = REPO_ROOT / "bsim-platform" / "biosimulant-desktop" / "src-t
 DEFAULT_DESKTOP_BIN = DESKTOP_SRC_TAURI / "target" / "debug" / "biosimulant-desktop"
 MODEL_DIR = REPO_ROOT / "models" / "models-boltz" / "models" / "boltz-boltz2-affinity-predictor"
 EXAMPLE_CONFIG = REPO_ROOT / "models" / "models-boltz" / "examples" / "boltz2-minimal" / "config.yaml"
-DEFAULT_OUTPUT = Path.cwd() / "Boltz2_Remote_GPU_Example.bsispace"
+DEFAULT_OUTPUT = Path.cwd() / "Boltz2_Remote_GPU_Example.bsilab"
 HUB_API_BASE = "https://prod-api.biosimulant.com/api"
 
 
@@ -247,7 +247,7 @@ def build_manifest(space_id: str, imported_model: dict[str, Any], protein_sequen
         "wiring": [],
         "runtime": {
             "duration": 0.01,
-            "tick_dt": 0.01,
+            "communication_step": 0.01,
             "initial_inputs": {},
         },
         "scientific_context": {
@@ -281,7 +281,7 @@ def patch_owned_model_runtime_dependency(
     owned_path: str,
     package_spec: str,
 ) -> None:
-    model_manifest_path = data_dir / "spaces" / space_id / Path(owned_path) / "model.yaml"
+    model_manifest_path = data_dir / "labs" / space_id / Path(owned_path) / "model.yaml"
     if not model_manifest_path.is_file():
         raise RuntimeError(f"Owned model manifest is missing: {model_manifest_path}")
     contents = model_manifest_path.read_text()
@@ -313,7 +313,7 @@ def mirror_and_wait_for_remote_results(
             "payload": {
                 "space_id": stage_result["hub_space_id"],
                 "space_commit": stage_result["space_commit"],
-                "simulation_config": {"duration": 0.01, "tick_dt": 0.01, "initial_inputs": {}},
+                "simulation_config": {"duration": 0.01, "initial_inputs": {}},
                 "remote_size_id": remote_size["id"],
             }
         },
@@ -332,7 +332,7 @@ def mirror_and_wait_for_remote_results(
             "status": remote_status,
             "execution_target": "remote",
             "hub_run_id": remote_run_id,
-            "simulation_config": {"duration": 0.01, "tick_dt": 0.01, "initial_inputs": {}},
+            "simulation_config": {"duration": 0.01, "initial_inputs": {}},
         },
     )
     local_run_id = local_run["id"]
@@ -374,7 +374,7 @@ def mirror_and_wait_for_remote_results(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build and validate a portable Boltz-2 .bsispace package.")
+    parser = argparse.ArgumentParser(description="Build and validate a portable Boltz-2 .bsilab package.")
     parser.add_argument("--desktop-bin", type=Path, default=DEFAULT_DESKTOP_BIN)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--skip-remote-validation", action="store_true")
@@ -387,7 +387,7 @@ def main() -> None:
     build_root = Path(tempfile.mkdtemp(prefix="boltz2-bsispace-build-"))
     export_dir = build_root / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
-    package_tmp_path = export_dir / "Boltz2_Remote_GPU_Example.bsispace"
+    package_tmp_path = export_dir / "Boltz2_Remote_GPU_Example.bsilab"
 
     data_dir = build_root / "data"
     import_data_dir = build_root / "imported-data"

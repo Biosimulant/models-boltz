@@ -15,12 +15,12 @@ import tarfile
 import hashlib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 import yaml
 
 from biosim import BioModule
-from biosim.signals import BioSignal, SignalMetadata
+from biosim.signals import (AcceptedSignalProfile, ArraySignal, BioSignal, EventSignal, RecordSignal, ScalarSignal, SignalSpec)
 
 _SUPPORTED_PYTHON_MINORS = (10, 11, 12)
 
@@ -46,6 +46,60 @@ def _coerce_run_options(value: Any) -> Dict[str, Any]:
             out[key] = item
     return out
 
+
+def _schema_type(value):
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "str"
+    return "json"
+
+
+def _signal_value(signal):
+    value = signal.value
+    if isinstance(value, dict) and set(value.keys()) == {"payload"}:
+        return value["payload"]
+    return value
+
+
+def _generic_input_spec(description=None):
+    return SignalSpec.record(
+        schema={"payload": "json"},
+        accepted_profiles=(
+            AcceptedSignalProfile(signal_type="record", schema={"payload": "json"}),
+            AcceptedSignalProfile(signal_type="scalar"),
+        ),
+        description=description,
+    )
+
+
+def _make_signal(*, source, name, value, emitted_at, spec=None):
+    if spec is None:
+        if isinstance(value, dict):
+            spec = SignalSpec.record(schema={str(key): _schema_type(item) for key, item in value.items()})
+        elif isinstance(value, (list, tuple)):
+            spec = SignalSpec.record(schema={"payload": "json"})
+        else:
+            spec = SignalSpec.scalar(dtype=_schema_type(value))
+
+    if spec.signal_type == "scalar":
+        return ScalarSignal(source=source, name=name, value=value, emitted_at=emitted_at, spec=spec)
+    if spec.signal_type == "array":
+        return ArraySignal(source=source, name=name, value=value, emitted_at=emitted_at, spec=spec)
+    if spec.signal_type == "event":
+        event_value = value
+        if spec.schema is not None and not (isinstance(value, dict) and set(value.keys()) == set(spec.schema.keys())):
+            event_value = {"payload": value}
+        return EventSignal(source=source, name=name, value=event_value, emitted_at=emitted_at, spec=spec)
+
+    record_value = value
+    if not isinstance(value, dict) or set(value.keys()) != set((spec.schema or {}).keys()):
+        record_value = {"payload": value}
+    return RecordSignal(source=source, name=name, value=record_value, emitted_at=emitted_at, spec=spec)
 
 class Boltz2AffinityPredictor(BioModule):
     """Run `boltz predict` once and surface compact structured outputs."""
@@ -74,9 +128,9 @@ class Boltz2AffinityPredictor(BioModule):
         override: bool = True,
         command_timeout_s: float = 3600.0,
         runtime_setup_timeout_s: float = 1800.0,
-        min_dt: float = 0.01,
+        integration_step: float = 0.01,
     ) -> None:
-        self.min_dt = min_dt
+        self.integration_step = float(integration_step)
         self.boltz_executable = boltz_executable
         self.runtime_mode = runtime_mode
         self.runtime_python = runtime_python
@@ -112,11 +166,21 @@ class Boltz2AffinityPredictor(BioModule):
         self._cached_payloads: Dict[str, Any] = {}
         self._last_signature: Optional[str] = None
 
-    def inputs(self) -> Set[str]:
-        return {"protein_sequence", "ligand_smiles", "msa_path", "run_options"}
+    def inputs(self) -> dict[str, SignalSpec]:
+        return {
+            'protein_sequence': _generic_input_spec(),
+            'ligand_smiles': _generic_input_spec(),
+            'msa_path': _generic_input_spec(),
+            'run_options': _generic_input_spec(),
+        }
 
-    def outputs(self) -> Set[str]:
-        return {"affinity_summary", "confidence_summary", "structure_artifacts", "run_metadata"}
+    def outputs(self) -> dict[str, SignalSpec]:
+        return {
+            'affinity_summary': SignalSpec.record(schema={'payload': 'json'}, description='Parsed Boltz affinity summary for the latest run'),
+            'confidence_summary': SignalSpec.record(schema={'payload': 'json'}, description='Parsed Boltz confidence summary for the top-ranked prediction'),
+            'structure_artifacts': SignalSpec.record(schema={'payload': 'json'}, description='Absolute paths to the latest Boltz output artifacts'),
+            'run_metadata': SignalSpec.record(schema={'payload': 'json'}, description='Execution metadata and captured logs for the latest Boltz invocation'),
+        }
 
     def reset(self) -> None:
         self._outputs = {}
@@ -128,28 +192,28 @@ class Boltz2AffinityPredictor(BioModule):
 
         protein_signal = signals.get("protein_sequence")
         if protein_signal is not None:
-            protein_sequence = _coerce_string(protein_signal.value, "sequence")
+            protein_sequence = _coerce_string(_signal_value(protein_signal), "sequence")
             if protein_sequence != self._protein_sequence:
                 self._protein_sequence = protein_sequence
                 changed = True
 
         ligand_signal = signals.get("ligand_smiles")
         if ligand_signal is not None:
-            ligand_smiles = _coerce_string(ligand_signal.value, "smiles")
+            ligand_smiles = _coerce_string(_signal_value(ligand_signal), "smiles")
             if ligand_smiles != self._ligand_smiles:
                 self._ligand_smiles = ligand_smiles
                 changed = True
 
         msa_signal = signals.get("msa_path")
         if msa_signal is not None:
-            msa_path = _coerce_string(msa_signal.value, "path")
+            msa_path = _coerce_string(_signal_value(msa_signal), "path")
             if msa_path != self._msa_path:
                 self._msa_path = msa_path
                 changed = True
 
         run_signal = signals.get("run_options")
         if run_signal is not None:
-            run_options = _coerce_run_options(run_signal.value)
+            run_options = _coerce_run_options(_signal_value(run_signal))
             if run_options != self._run_options:
                 self._run_options = run_options
                 changed = True
@@ -157,7 +221,8 @@ class Boltz2AffinityPredictor(BioModule):
         if changed:
             self._last_signature = None
 
-    def advance_to(self, t: float) -> None:
+    def advance_window(self, start: float, end: float) -> None:
+        t = float(end)
         resolved = self._resolved_options()
         signature = json.dumps(
             {
@@ -808,32 +873,8 @@ class Boltz2AffinityPredictor(BioModule):
     def _emit_outputs(self, t: float) -> None:
         source = getattr(self, "_world_name", self.__class__.__name__)
         self._outputs = {
-            "affinity_summary": BioSignal(
-                source=source,
-                name="affinity_summary",
-                value=self._cached_payloads.get("affinity_summary", {}),
-                time=t,
-                metadata=SignalMetadata(description="Parsed Boltz affinity summary for the latest run", kind="metric"),
-            ),
-            "confidence_summary": BioSignal(
-                source=source,
-                name="confidence_summary",
-                value=self._cached_payloads.get("confidence_summary", {}),
-                time=t,
-                metadata=SignalMetadata(description="Parsed Boltz confidence summary for the top-ranked prediction", kind="metric"),
-            ),
-            "structure_artifacts": BioSignal(
-                source=source,
-                name="structure_artifacts",
-                value=self._cached_payloads.get("structure_artifacts", {}),
-                time=t,
-                metadata=SignalMetadata(description="Absolute paths to the latest Boltz output artifacts", kind="state"),
-            ),
-            "run_metadata": BioSignal(
-                source=source,
-                name="run_metadata",
-                value=self._cached_payloads.get("run_metadata", {}),
-                time=t,
-                metadata=SignalMetadata(description="Execution metadata and captured logs for the latest Boltz invocation", kind="metric"),
-            ),
+            "affinity_summary": _make_signal(source=source, name="affinity_summary", value=self._cached_payloads.get("affinity_summary", {}), emitted_at=t, spec=self.outputs().get("affinity_summary") if 'self' in locals() else None),
+            "confidence_summary": _make_signal(source=source, name="confidence_summary", value=self._cached_payloads.get("confidence_summary", {}), emitted_at=t, spec=self.outputs().get("confidence_summary") if 'self' in locals() else None),
+            "structure_artifacts": _make_signal(source=source, name="structure_artifacts", value=self._cached_payloads.get("structure_artifacts", {}), emitted_at=t, spec=self.outputs().get("structure_artifacts") if 'self' in locals() else None),
+            "run_metadata": _make_signal(source=source, name="run_metadata", value=self._cached_payloads.get("run_metadata", {}), emitted_at=t, spec=self.outputs().get("run_metadata") if 'self' in locals() else None),
         }

@@ -1,0 +1,41 @@
+schema_version: "2.0"
+title: "Boltz: Boltz2AffinityPredictor Lab"
+description: "Single-model lab wrapper for Boltz-2 affinity-focused protein-ligand predictions. Ships with a real protein/ligand pair so the lab runs out of the box on a GPU runner."
+models:
+  - alias: boltz_boltz2_affinity_predictor
+    path: model
+    parameters:
+      runtime_mode: "managed"
+      accelerator: "gpu"
+      use_msa_server: true
+      output_format: "mmcif"
+      override: true
+      recycling_steps: 3
+      sampling_steps: 200
+      diffusion_samples: 1
+      default_protein_sequence: "MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ"
+      default_ligand_smiles: "N[C@@H](Cc1ccc(O)cc1)C(=O)O"
+runtime:
+  duration: 0.01
+  communication_step: 0.01
+  initial_inputs: {}
+io:
+  inputs:
+    - name: protein_sequence
+      maps_to: boltz_boltz2_affinity_predictor.protein_sequence
+    - name: ligand_smiles
+      maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
+    - name: msa_path
+      maps_to: boltz_boltz2_affinity_predictor.msa_path
+    - name: run_options
+      maps_to: boltz_boltz2_affinity_predictor.run_options
+  outputs:
+    - name: affinity_summary
+      maps_to: boltz_boltz2_affinity_predictor.affinity_summary
+    - name: confidence_summary
+      maps_to: boltz_boltz2_affinity_predictor.confidence_summary
+    - name: structure_artifacts
+      maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
+    - name: run_metadata
+      maps_to: boltz_boltz2_affinity_predictor.run_metadata
+wiring: []
