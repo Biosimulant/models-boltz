@@ -23,40 +23,6 @@ module in this repository.
 - a fully owned checked-in `lab.yaml` source example for the portable
   Boltz-2 remote package, not just a placeholder manifest reference
 
-## Exact Commands
-
-Run the server-side MSA example:
-
-```bash
-python3 examples/run_example.py boltz2-minimal
-```
-
-Run the explicit-MSA example:
-
-```bash
-python3 examples/run_example.py boltz2-explicit-msa
-```
-
-Run the short no-MSA smoke example:
-
-```bash
-python3 examples/run_example.py boltz2-short-no-msa
-```
-
-Write results to a JSON file:
-
-```bash
-python3 examples/run_example.py boltz2-minimal --output-json examples/boltz2-minimal/latest-output.json
-```
-
-Use isolated work and runtime directories:
-
-```bash
-python3 examples/run_example.py boltz2-minimal \
-  --work-dir /tmp/models-boltz-runs \
-  --runtime-dir /tmp/models-boltz-runtime
-```
-
 ## Notes
 
 - These examples use real upstream Boltz example inputs rather than placeholders.

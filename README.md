@@ -1,6 +1,6 @@
 # models-boltz
 
-> Storage-only repo: each former root model now lives in `labs/<slug>/model/` and is wrapped by
+> Storage-only repo: each former root model now lives in `labs/<slug>/models/core/` and is wrapped by
 > `labs/<slug>/lab.yaml`. This repo has no repo-level import catalog and no composed labs at the root.
 
 Curated collection of **Boltz-family biomolecular interaction models** for the
@@ -51,15 +51,6 @@ The initial Boltz-2 model:
   run metadata
 - emits a `structure3d` visualization payload for compatible BioSim web and
   desktop clients so the top-ranked complex can be inspected directly
-
-## Examples
-
-The repo includes three examples under [`examples/`](examples):
-- `boltz2-minimal` for a server-side MSA workflow
-- `boltz2-explicit-msa` for a provided MSA path workflow
-- `boltz2-wiring` for a BioSim `lab.yaml` wiring example
-
-See [`examples/README.md`](examples/README.md) for the example inventory.
 
 ## Prerequisites
 

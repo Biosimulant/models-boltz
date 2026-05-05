@@ -1,4 +1,5 @@
-description: Portable single-model Boltz-2 lab with a real protein-ligand affinity example intended for remote GPU execution and inline 3D structure visualization.
+description: Portable single-model Boltz-2 lab with a real protein-ligand affinity
+  example intended for remote GPU execution and inline 3D structure visualization.
 models:
 - alias: boltz2_affinity
   parameters:
@@ -12,7 +13,7 @@ models:
     runtime_mode: managed
     sampling_steps: 200
     use_msa_server: true
-  path: "../../labs/boltz-boltz2-affinity-predictor/model"
+  path: ../../labs/boltz-boltz2-affinity-predictor/models/core
 package: Biosimulant/models-boltz/examples/boltz2-wiring
 runtime:
   duration: 0.01
@@ -28,7 +29,8 @@ scientific_context:
   - Confidence summary values from Boltz.
   - A renderable structure3d visual backed by a persisted artifact.
   mode: native-boltz
-  question: Can Boltz-2 predict a protein-ligand complex remotely and return a renderable 3D structure inside the desktop app?
+  question: Can Boltz-2 predict a protein-ligand complex remotely and return a renderable
+    3D structure inside the desktop app?
 title: Boltz-2 Remote Example
 version: 7651a2829b60b601aef619a028a589b63d414c92-source-tree-1
 wiring: []

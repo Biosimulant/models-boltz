@@ -59,17 +59,6 @@ The model accepts four input signals. Each one falls back to the matching `defau
 - `structure_artifacts` (record): absolute paths to the Boltz output structure files (mmCIF or PDB depending on `output_format`).
 - `run_metadata` (record): runtime metadata, Boltz version, output directory, truncated stdout/stderr, and `status: ok` or `status: error`.
 
-## Running with the Bundled Defaults
-
-The same protein/ligand pair is also wired up as a direct local example in [`examples/boltz2-minimal/config.yaml`](../../examples/boltz2-minimal/config.yaml). To run it without the desktop app:
-
-```bash
-cd /path/to/models-boltz
-python3 examples/run_example.py boltz2-minimal
-```
-
-That produces the same four BioSignal outputs as a desktop run. The first invocation installs the pinned Boltz package into a local venv (`.runtime/boltz2/`); subsequent runs reuse it. CPU mode is supported only for plumbing checks; real runs need a CUDA-capable GPU.
-
 ## Running in Biosimulant Desktop
 
 Import the lab once with the Biosim CLI, then open it from the desktop app. The bundled defaults mean the first run requires no parameter editing.

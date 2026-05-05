@@ -95,16 +95,3 @@ The structure visual uses the shared BioSim payload shape:
 BioSim SimUI strips `source.path` before sending visuals to the browser and
 serves the structure through the artifact endpoint instead.
 
-## Examples
-
-See:
-- [`examples/boltz2-minimal`](../../examples/boltz2-minimal)
-- [`examples/boltz2-explicit-msa`](../../examples/boltz2-explicit-msa)
-- [`examples/boltz2-wiring`](../../examples/boltz2-wiring)
-
-Remote smoke command:
-
-```bash
-cd ../../../bsim-platform/backend
-BIOSIM_MODAL_RUN_REAL_SMOKE=1 ./.venv/bin/pytest -q tests/test_executor_remote_overrides.py -k modal_real_boltz_smoke
-```

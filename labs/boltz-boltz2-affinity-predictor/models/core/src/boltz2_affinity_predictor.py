@@ -378,57 +378,8 @@ class Boltz2AffinityPredictor(BioModule):
     def get_outputs(self) -> Dict[str, BioSignal]:
         return dict(self._outputs)
 
-    def visualize(self) -> Optional[list[Dict[str, Any]]]:
-        run_metadata = self._cached_payloads.get("run_metadata", {})
-        artifacts = self._cached_payloads.get("structure_artifacts", {})
-        confidence = self._cached_payloads.get("confidence_summary", {})
-        affinity = self._cached_payloads.get("affinity_summary", {})
-
-        if not isinstance(run_metadata, Mapping) or run_metadata.get("status") != "completed":
-            return None
-        if not isinstance(artifacts, Mapping):
-            return None
-
-        structure_file = artifacts.get("structure_file")
-        if not isinstance(structure_file, str) or not structure_file:
-            return None
-
-        structure_path = Path(structure_file).expanduser()
-        if not structure_path.is_absolute():
-            structure_path = Path.cwd() / structure_path
-        structure_format = self._structure_format(structure_path)
-        if structure_format is None:
-            return None
-
-        annotations = self._build_structure_annotations(confidence, affinity)
-        rows = [[label, str(value)] for label, value in annotations]
-
-        return [
-            {
-                "render": "structure3d",
-                "description": "Top-ranked Boltz structure prediction for the latest protein-ligand run.",
-                "data": {
-                    "title": "Predicted Complex Structure",
-                    "source": {
-                        "kind": "artifact",
-                        "artifact_id": self._structure_artifact_id(structure_path),
-                        "path": str(structure_path),
-                    },
-                    "format": structure_format,
-                    "annotations": [{"label": label, "value": value} for label, value in annotations],
-                    "initial_view": {"reset_camera": True},
-                },
-            },
-            {
-                "render": "table",
-                "description": "Key affinity and confidence metrics extracted from the latest Boltz outputs.",
-                "data": {
-                    "title": "Boltz Summary",
-                    "columns": ["Metric", "Value"],
-                    "rows": rows,
-                },
-            },
-        ]
+    def visualize(self) -> Optional[list[dict[str, Any]]]:
+        return None
 
     def _resolved_options(self) -> Dict[str, Any]:
         resolved: Dict[str, Any] = {

@@ -6,7 +6,7 @@ source:
     - examples/affinity.yaml
     - examples/msa/seq1.a3m
 model:
-  path: ../../labs/boltz-boltz2-affinity-predictor/model
+  path: ../../labs/boltz-boltz2-affinity-predictor/models/core
   class: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
   parameters:
     runtime_mode: managed

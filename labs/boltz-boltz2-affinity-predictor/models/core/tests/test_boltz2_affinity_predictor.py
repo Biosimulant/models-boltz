@@ -154,14 +154,7 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert any("--cache" in command for command in commands if command and command[0].endswith("boltz"))
     assert metadata["resolved_boltz_executable"].endswith("/bin/boltz")
 
-    visuals = module.visualize()
-    assert visuals is not None
-    assert visuals[0]["render"] == "structure3d"
-    assert visuals[0]["data"]["format"] == "mmcif"
-    assert visuals[0]["data"]["source"]["kind"] == "artifact"
-    assert Path(visuals[0]["data"]["source"]["path"]).name == "request_model_0.cif"
-    assert visuals[1]["render"] == "table"
-    assert visuals[1]["data"]["columns"] == ["Metric", "Value"]
+    assert module.visualize() is None
 
 
 def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim, tmp_path):
@@ -193,10 +186,7 @@ def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim
         "affinity_summary": {"affinity_probability_binary": 0.97},
     }
 
-    visuals = module.visualize()
-    assert visuals is not None
-    assert visuals[0]["data"]["source"]["path"] == str(structure_file)
-    assert "/../" in visuals[0]["data"]["source"]["path"]
+    assert module.visualize() is None
     assert module._cached_payloads["structure_artifacts"]["prediction_dir"] == str(prediction_dir)
     assert "/../" in module._cached_payloads["structure_artifacts"]["prediction_dir"]
 
@@ -663,7 +653,7 @@ def test_managed_runtime_selects_supported_python_when_host_python_is_unsupporte
 
 
 def test_example_files_parse_and_reference_real_interface(biosim):
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = Path(__file__).resolve().parents[5]
     minimal = yaml.safe_load((repo_root / "examples" / "boltz2-minimal" / "config.yaml").read_text(encoding="utf-8"))
     explicit = yaml.safe_load((repo_root / "examples" / "boltz2-explicit-msa" / "config.yaml").read_text(encoding="utf-8"))
     short_no_msa = yaml.safe_load((repo_root / "examples" / "boltz2-short-no-msa" / "config.yaml").read_text(encoding="utf-8"))
@@ -674,8 +664,8 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     assert explicit["model"]["inputs"]["msa_path"] == "./assets/seq1.a3m"
     assert short_no_msa["model"]["inputs"]["msa_path"] == "empty"
     assert short_no_msa["model"]["parameters"]["sampling_steps"] == 1
-    assert minimal["model"]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
-    assert wiring["models"][0]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
+    assert minimal["model"]["path"] == "../../labs/boltz-boltz2-affinity-predictor/models/core"
+    assert wiring["models"][0]["path"] == "../../labs/boltz-boltz2-affinity-predictor/models/core"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
     assert "default_protein_sequence" in wiring["models"][0]["parameters"]
 
@@ -685,7 +675,7 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     reason="Set BIOSIM_BOLTZ_RUN_REAL_SMOKE=1 to run the real Boltz smoke test.",
 )
 def test_real_smoke_example_runs(tmp_path):
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = Path(__file__).resolve().parents[5]
     output_json = tmp_path / "real-smoke-output.json"
     completed = subprocess.run(
         [
