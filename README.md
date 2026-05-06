@@ -60,7 +60,7 @@ default: the model bootstraps a local managed runtime under this repository on
 first use and reuses a local cache directory on later runs.
 
 ```bash
-pip install "biosim @ git+https://github.com/BioSimulant/biosim.git@main"
+pip install "biosim==0.0.7"
 ```
 
 For real runs, the first execution still needs:
