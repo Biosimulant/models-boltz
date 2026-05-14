@@ -4,8 +4,15 @@
     {
       "id": "boltz_boltz2_affinity_predictor",
       "position": {
-        "x": 360,
+        "x": 0,
         "y": 0
+      }
+    },
+    {
+      "id": "visualisation",
+      "position": {
+        "x": 444.0760456273764,
+        "y": 390.28136882129274
       }
     }
   ]

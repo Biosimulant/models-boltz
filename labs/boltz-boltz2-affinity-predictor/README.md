@@ -75,3 +75,4 @@ To predict a different complex, override `protein_sequence` and `ligand_smiles` 
 - Managed runtime mode installs `boltz[cuda]==2.0.2` on first run. Plan for a multi-minute first-run install; subsequent runs are offline.
 - The bundled defaults rely on `use_msa_server: true` because no MSA file is shipped. To run fully offline, set `default_msa_path` to a local `.a3m` and toggle `use_msa_server` off.
 - The lab's `runtime.duration` is intentionally short. Boltz is event-driven; the wrapper runs the prediction inside a single advance window.
+- The lab sets `runtime.settle_steps: 1` so the downstream visualization module can consume the final structure artifacts without extending simulated time.
