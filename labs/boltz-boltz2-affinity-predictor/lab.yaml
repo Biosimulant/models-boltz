@@ -42,6 +42,13 @@ runtime:
   initial_inputs: {}
   settle_steps: 1
 schema_version: '2.0'
+tags:
+- docking
+- boltz
+- structural-biology
+- protein-ligand
+- affinity
+- gpu
 title: 'Boltz: Boltz2AffinityPredictor Lab'
 wiring:
 - from: boltz_boltz2_affinity_predictor.affinity_summary

@@ -4,7 +4,7 @@ description: "Wraps the native Boltz-2 CLI for single protein and single ligand 
 package: "Biosimulant/models-boltz:labs/boltz-boltz2-affinity-predictor/models/core/model.yaml"
 version: "7651a2829b60b601aef619a028a589b63d414c92"
 standard: other
-tags: [boltz, structural-biology, affinity, protein-ligand, gpu]
+tags: [boltz, docking, structural-biology, affinity, protein-ligand, gpu]
 authors: ["Biosimulant Team"]
 biosim:
   communication_step: 0.01
