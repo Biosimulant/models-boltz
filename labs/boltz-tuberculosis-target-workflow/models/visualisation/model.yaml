@@ -1,0 +1,27 @@
+schema_version: '2.0'
+title: Tuberculosis Target Workflow Visualisation
+description: Presentation model for the guided Tuberculosis Target Workflow Boltz
+  workflow.
+standard: other
+tags:
+- boltz-workflow
+- docking
+- visualisation
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.docking_visualisation:DockingVisualisationModel
+  init_kwargs:
+    integration_step: 0.01
+    source_alias: boltz_boltz2_affinity_predictor
+    mode: boltz
+    lab_title: Tuberculosis Target Workflow
+  communication_step: 0.01
+parameters:
+- name: integration_step
+  value: 0.01
+  min: 0.0
+  description: Sampling step for the visualisation model.
+io:
+  inputs: []
+  outputs: []

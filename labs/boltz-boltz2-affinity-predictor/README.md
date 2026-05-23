@@ -2,7 +2,7 @@
 
 This lab runs Boltz-2 to jointly predict the 3D structure of a protein-ligand complex and a binding-affinity summary from sequence-only inputs. The protein is provided as an amino-acid string and the ligand as a SMILES string. The lab ships with a real protein/ligand example baked into `lab.yaml` so a fresh run produces a renderable complex and an affinity readout without any extra setup.
 
-The wrapper drives the upstream Boltz CLI (pinned at `boltz[cuda]==2.0.2`), runs the diffusion + recycling pipeline on a GPU runner, and returns the parsed affinity and confidence summaries plus file-backed structure artifacts (mmCIF by default).
+The wrapper drives the upstream Boltz CLI pinned at `boltz[cuda]==2.0.2`, runs the diffusion and recycling pipeline on a GPU runner, and returns the parsed affinity and confidence summaries plus file-backed structure artifacts (mmCIF by default).
 
 This lab is for single-complex, sequence-only Boltz-2 affinity runs. It does not handle batch screening, custom MSAs without an MSA server, alternative Boltz model variants, or non-Boltz structural runtimes. Those belong in adjacent labs.
 
@@ -38,7 +38,8 @@ The run metadata records which Boltz version executed, the resolved output direc
 - `lab.yaml` describes the lab, exposes its inputs and outputs, and pins the bundled defaults.
 - `wiring-layout.json` places the model on the canvas.
 - `model/model.yaml` describes the model package, parameters, and ports.
-- `model/src/boltz2_affinity_predictor.py` contains the wrapper, managed-runtime install logic, and visualization shaping.
+- `models/core/src/boltz2_affinity_predictor.py` contains the wrapper and managed-runtime install logic.
+- `models/visualisation/src/docking_visualisation.py` turns the structure, affinity, confidence, and run metadata records into Biosimulant visuals.
 - `model/tests/` checks the wrapper, manifest, and lab contract.
 
 The bundled defaults are encoded as strings inside `lab.yaml` (`default_protein_sequence`, `default_ligand_smiles`). There is no `model/data/` directory because Boltz-2 takes sequence-only inputs.

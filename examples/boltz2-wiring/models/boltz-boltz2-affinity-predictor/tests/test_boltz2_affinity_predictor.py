@@ -516,9 +516,14 @@ def test_managed_runtime_selects_supported_python_when_host_python_is_unsupporte
 
     real_which = shutil.which
 
+    fake_python_dir = tmp_path / "fake-bin"
+    fake_python_dir.mkdir(parents=True, exist_ok=True)
+    fake_python_path = fake_python_dir / "python3.12"
+    fake_python_path.write_text("", encoding="utf-8")
+
     def fake_which(name):
         if name == "python3.12":
-            return "/opt/homebrew/bin/python3.12"
+            return str(fake_python_path)
         return real_which(name)
 
     def fake_run(command, cwd, capture_output, text, timeout, check):  # noqa: ARG001
@@ -571,8 +576,8 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     assert explicit["model"]["inputs"]["msa_path"] == "./assets/seq1.a3m"
     assert short_no_msa["model"]["inputs"]["msa_path"] == "empty"
     assert short_no_msa["model"]["parameters"]["sampling_steps"] == 1
-    assert minimal["model"]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
-    assert wiring["models"][0]["path"] == "../../labs/boltz-boltz2-affinity-predictor/model"
+    assert minimal["model"]["path"] == "../../labs/boltz-boltz2-affinity-predictor/models/core"
+    assert wiring["models"][0]["path"] == "../../labs/boltz-boltz2-affinity-predictor/models/core"
     assert wiring["models"][0]["parameters"]["runtime_mode"] == "managed"
     assert "default_protein_sequence" in wiring["models"][0]["parameters"]
 
@@ -582,7 +587,7 @@ def test_example_files_parse_and_reference_real_interface(biosim):
     reason="Set BIOSIM_BOLTZ_RUN_REAL_SMOKE=1 to run the real Boltz smoke test.",
 )
 def test_real_smoke_example_runs(tmp_path):
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[5]
     output_json = tmp_path / "real-smoke-output.json"
     completed = subprocess.run(
         [
@@ -637,5 +642,4 @@ def _generic_input_spec(description=None):
         ),
         description=description,
     )
-
 

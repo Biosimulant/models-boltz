@@ -1,0 +1,96 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Cancer Kinase'
+description: Guided Boltz-2 workflow for exploring a cancer-relevant ABL1 kinase domain
+  with an imatinib reference ligand example, binder probability, affinity-like value,
+  confidence metrics, and reproducible report context.
+tags:
+- boltz-workflow
+- boltz
+- protein-ligand
+- affinity
+- structural-biology
+- guided-workflow
+- gpu
+- cancer
+- kinase
+- abl1
+models:
+- alias: boltz_boltz2_affinity_predictor
+  path: models/core
+  parameters:
+    accelerator: gpu
+    default_protein_sequence: VSPNYDKWEMERTDITMKHKLGGGQYGEVYEGVWKKYSLTVAVKTLKEDTMEVEEFLKEAAVMKEIKHPNLVQLLGVCTREPPFYIITEFMTYGNLLDYLRECNRQEVNAVVLLYMATQISSAMEYLEKKNFIHRDLAARNCLVGENHLVKVADFGLSRLMTGDTYTAHAGAKFPIKWTAPESLAYNKFSIKSDVWAFGVLLWEIATYGMSPYPGIDLSQVYELLEKDYRMERPEGCPEKVYELMRACWQWNPSDRPSFAEIHQAFETMFQES
+    default_ligand_smiles: CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5
+    default_run_options:
+      workflow_name: Cancer Kinase Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Human ABL1 kinase
+        domain and Imatinib reference kinase inhibitor
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Human ABL1 kinase domain
+      ligand_name: Imatinib reference kinase inhibitor
+      source_pdb: 2HYY
+      source_pubchem_cid: '5291'
+    runtime_mode: managed
+    use_msa_server: true
+    output_format: mmcif
+    override: true
+    recycling_steps: 3
+    sampling_steps: 200
+    diffusion_samples: 1
+- alias: visualisation
+  path: models/visualisation
+  parameters:
+    integration_step: 0.01
+io:
+  inputs:
+  - name: protein_sequence
+    label: ABL1 Kinase Sequence
+    description: Amino-acid sequence for the curated human ABL1 kinase-domain target; maps directly to the Boltz-2 protein input.
+    maps_to: boltz_boltz2_affinity_predictor.protein_sequence
+  - name: ligand_smiles
+    label: Imatinib Ligand SMILES
+    description: SMILES string for the imatinib reference kinase-inhibitor example; maps directly to the Boltz-2 ligand input.
+    maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
+  - name: msa_path
+    label: Precomputed MSA Path
+    description: Optional path to a precomputed MSA file; leave unset when the configured Boltz MSA server is used.
+    maps_to: boltz_boltz2_affinity_predictor.msa_path
+  - name: run_options
+    label: Boltz Run Options
+    description: Optional structured controls for the Boltz workflow, including source metadata, sampling settings, and interpretation scope.
+    maps_to: boltz_boltz2_affinity_predictor.run_options
+  outputs:
+  - name: affinity_summary
+    label: Affinity-Style Summary
+    description: Parsed Boltz-2 binder probability and affinity-like outputs for this kinase-ligand prediction.
+    maps_to: boltz_boltz2_affinity_predictor.affinity_summary
+  - name: confidence_summary
+    label: Structure Confidence Summary
+    description: Parsed Boltz-2 confidence outputs for the predicted kinase-ligand complex.
+    maps_to: boltz_boltz2_affinity_predictor.confidence_summary
+  - name: structure_artifacts
+    label: Predicted Complex Structure Artifacts
+    description: File-backed predicted complex structures used by the 3D visualisation.
+    maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
+  - name: run_metadata
+    label: Boltz Run Metadata
+    description: Runtime status, command metadata, logs, and caveats for the latest Boltz invocation.
+    maps_to: boltz_boltz2_affinity_predictor.run_metadata
+wiring:
+- from: boltz_boltz2_affinity_predictor.affinity_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_affinity_summary
+- from: boltz_boltz2_affinity_predictor.confidence_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_confidence_summary
+- from: boltz_boltz2_affinity_predictor.structure_artifacts
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_structure_artifacts
+- from: boltz_boltz2_affinity_predictor.run_metadata
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+runtime:
+  duration: 0.01
+  communication_step: 0.01
+  settle_steps: 1
+  initial_inputs: {}

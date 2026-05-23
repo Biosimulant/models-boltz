@@ -1,7 +1,8 @@
 # models-boltz
 
-> Storage-only repo: each former root model now lives in `labs/<slug>/models/core/` and is wrapped by
-> `labs/<slug>/lab.yaml`. This repo has no repo-level import catalog and no composed labs at the root.
+> Publish-ready Boltz lab repo: each lab is self-contained under `labs/<slug>/`
+> with a core Boltz runner, visualisation module, README, screenshots, and
+> source-faithful caveats for generated structure and affinity-style outputs.
 
 Curated collection of **Boltz-family biomolecular interaction models** for the
 **biosim** platform.
@@ -19,11 +20,17 @@ This repo is distinct from
 
 ## What's Inside
 
-### Wrapper Sublabs
+### Publish-Ready Labs
 
-| Sublab | Description |
+| Lab | Description |
 |---|---|
 | `boltz-boltz2-affinity-predictor` | Native Boltz-2 subprocess wrapper that predicts structure, confidence, and affinity for a single protein plus single ligand workflow. |
+| `boltz-protein-ligand-101-workflow` | Guided protein-ligand walkthrough using a curated sequence and ligand example. |
+| `boltz-cancer-kinase-workflow` | ABL1 kinase-domain workflow with an imatinib reference ligand example. |
+| `boltz-antiviral-protease-workflow` | SARS-CoV-2 3C-like protease workflow with a nirmatrelvir reference ligand example. |
+| `boltz-tuberculosis-target-workflow` | Mycobacterium tuberculosis InhA workflow with a triclosan reference ligand example. |
+| `boltz-malaria-binding-workflow` | Plasmodium falciparum falcipain-2 workflow with an E-64 reference ligand example. |
+| `boltz-batch-ligand-ranking-workflow` | Small-set ligand ranking workflow that compares three curated ABL1 ligands. |
 
 ### Repo Scope
 
@@ -80,7 +87,7 @@ purges the affected cached assets and retries once automatically.
 For BioSim remote execution on Modal, the same package is used without a
 Boltz-specific provider branch:
 
-- the package manifest pins `boltz[cuda]==2.2.1` for GPU-backed sandbox
+- the package manifest pins `boltz[cuda]==2.0.2` for GPU-backed sandbox
   dependency installs on Modal
 - remote runs force `runtime_mode: external` through manifest-declared
   remote init overrides

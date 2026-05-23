@@ -65,7 +65,7 @@ but the default is `managed`.
 
 This package is also prepared for the generic BioSim remote executor path.
 
-- the manifest pins `boltz[cuda]==2.2.1` so the remote sandbox installs the
+- the manifest pins `boltz[cuda]==2.0.2` so the remote sandbox installs the
   CUDA optional dependencies required by Boltz on Modal GPUs through the normal
   runtime dependency policy
 - the manifest declares remote-only init overrides so Modal runs force

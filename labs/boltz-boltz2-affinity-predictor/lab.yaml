@@ -3,21 +3,37 @@ io:
   inputs:
   - maps_to: boltz_boltz2_affinity_predictor.protein_sequence
     name: protein_sequence
+    label: Target Protein Sequence
+    description: Amino-acid sequence passed directly to the Boltz-2 protein input.
   - maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
     name: ligand_smiles
+    label: Ligand SMILES
+    description: Ligand structure encoded as a SMILES string and passed directly to Boltz-2.
   - maps_to: boltz_boltz2_affinity_predictor.msa_path
     name: msa_path
+    label: Precomputed MSA Path
+    description: Optional path to a precomputed MSA file; leave unset when the MSA server is used.
   - maps_to: boltz_boltz2_affinity_predictor.run_options
     name: run_options
+    label: Boltz Run Options
+    description: Optional structured Boltz workflow controls such as MSA-server use, output format, and sampling settings.
   outputs:
   - maps_to: boltz_boltz2_affinity_predictor.affinity_summary
     name: affinity_summary
+    label: Affinity-Style Summary
+    description: Parsed Boltz-2 affinity outputs, including binder probability and predicted affinity-like value when emitted.
   - maps_to: boltz_boltz2_affinity_predictor.confidence_summary
     name: confidence_summary
+    label: Structure Confidence Summary
+    description: Parsed Boltz-2 confidence outputs for the top-ranked predicted complex.
   - maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
     name: structure_artifacts
+    label: Predicted Complex Structure Artifacts
+    description: File-backed structure artifacts, usually mmCIF, used by the 3D structure visualisation.
   - maps_to: boltz_boltz2_affinity_predictor.run_metadata
     name: run_metadata
+    label: Boltz Run Metadata
+    description: Runtime status, command metadata, logs, and caveats for the latest Boltz invocation.
 models:
 - alias: boltz_boltz2_affinity_predictor
   parameters:

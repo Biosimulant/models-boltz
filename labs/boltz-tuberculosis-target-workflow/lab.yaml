@@ -1,0 +1,96 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Tuberculosis Target'
+description: Guided Boltz-2 workflow for exploring a Mycobacterium tuberculosis InhA
+  target with a triclosan reference ligand example, binder probability, affinity-like
+  value, confidence metrics, and reproducible report context.
+tags:
+- boltz-workflow
+- boltz
+- protein-ligand
+- affinity
+- structural-biology
+- guided-workflow
+- gpu
+- tuberculosis
+- infectious-disease
+- inha
+models:
+- alias: boltz_boltz2_affinity_predictor
+  path: models/core
+  parameters:
+    accelerator: gpu
+    default_protein_sequence: MTGLLDGKRILVSGIITDSSIAFHIARVAQEQGAQLVLTGFDRLRLIQRITDRLPAKAPLLELDVQNEEHLASLAGRVTEAIGAGNKLDGVVHSIGFMPQTGMGINPFFDAPYADVSKGIHISAYSYASMAKALLPIMNPGGSIVGMDFDPSRAMPAYNWMTVAKSALESVNRFVAREAGKYGVRSNLVAAGPIRTLAMSAIVGGALGEEAGAQIQLLEEGWDQRAPIGWNMKDATPVAKTVCALLSDWLPATTGDIIYADGGAHTQLL
+    default_ligand_smiles: C1=CC(=C(C=C1Cl)O)OC2=C(C=C(C=C2)Cl)Cl
+    default_run_options:
+      workflow_name: Tuberculosis Target Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Mycobacterium tuberculosis
+        InhA enoyl-ACP reductase and Triclosan reference inhibitor-like ligand
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Mycobacterium tuberculosis InhA enoyl-ACP reductase
+      ligand_name: Triclosan reference inhibitor-like ligand
+      source_pdb: 3FNE
+      source_pubchem_cid: '5564'
+    runtime_mode: managed
+    use_msa_server: true
+    output_format: mmcif
+    override: true
+    recycling_steps: 3
+    sampling_steps: 200
+    diffusion_samples: 1
+- alias: visualisation
+  path: models/visualisation
+  parameters:
+    integration_step: 0.01
+io:
+  inputs:
+  - name: protein_sequence
+    label: InhA Target Sequence
+    description: Amino-acid sequence for the curated Mycobacterium tuberculosis InhA target; maps directly to the Boltz-2 protein input.
+    maps_to: boltz_boltz2_affinity_predictor.protein_sequence
+  - name: ligand_smiles
+    label: Triclosan Ligand SMILES
+    description: SMILES string for the triclosan reference inhibitor-like ligand example; maps directly to the Boltz-2 ligand input.
+    maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
+  - name: msa_path
+    label: Precomputed MSA Path
+    description: Optional path to a precomputed MSA file; leave unset when the configured Boltz MSA server is used.
+    maps_to: boltz_boltz2_affinity_predictor.msa_path
+  - name: run_options
+    label: Boltz Run Options
+    description: Optional structured controls for the Boltz workflow, including source metadata, sampling settings, and interpretation scope.
+    maps_to: boltz_boltz2_affinity_predictor.run_options
+  outputs:
+  - name: affinity_summary
+    label: Affinity-Style Summary
+    description: Parsed Boltz-2 binder probability and affinity-like outputs for this InhA-ligand prediction.
+    maps_to: boltz_boltz2_affinity_predictor.affinity_summary
+  - name: confidence_summary
+    label: Structure Confidence Summary
+    description: Parsed Boltz-2 confidence outputs for the predicted InhA-ligand complex.
+    maps_to: boltz_boltz2_affinity_predictor.confidence_summary
+  - name: structure_artifacts
+    label: Predicted Complex Structure Artifacts
+    description: File-backed predicted complex structures used by the 3D visualisation.
+    maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
+  - name: run_metadata
+    label: Boltz Run Metadata
+    description: Runtime status, command metadata, logs, and caveats for the latest Boltz invocation.
+    maps_to: boltz_boltz2_affinity_predictor.run_metadata
+wiring:
+- from: boltz_boltz2_affinity_predictor.affinity_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_affinity_summary
+- from: boltz_boltz2_affinity_predictor.confidence_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_confidence_summary
+- from: boltz_boltz2_affinity_predictor.structure_artifacts
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_structure_artifacts
+- from: boltz_boltz2_affinity_predictor.run_metadata
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+runtime:
+  duration: 0.01
+  communication_step: 0.01
+  settle_steps: 1
+  initial_inputs: {}

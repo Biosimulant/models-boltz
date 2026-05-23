@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "local_id": "boltz-antiviral-protease-workflow",
+  "kind": "lab",
+  "source": "local",
+  "hub_id": "b453b1a8-7411-4382-8f94-4cba4d54f681",
+  "created_at": "2026-05-23 00:00:00",
+  "last_synced_at": "2026-05-23T13:04:40.761404+00:00",
+  "hub_manifest_hash": "55bb2c253c841335ce5793976ac2449734d647572ff5e704016eebcfde24f0fd",
+  "package_name": "boltz-workflow-antiviral-protease"
+}
