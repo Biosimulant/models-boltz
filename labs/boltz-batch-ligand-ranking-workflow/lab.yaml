@@ -13,11 +13,38 @@ tags:
 - batch-ranking
 - gpu
 models:
-- alias: boltz_batch_ligand_ranker
-  path: models/core
+- alias: batch_target_context
+  path: models/context
   parameters:
-    accelerator: gpu
+    scenario:
+      workflow_name: Batch Ligand Ranking
+      workflow_context: Guided Boltz-2 batch ligand ranking workflow using ABL1 kinase-domain
+        examples
+      workflow_question: How does a small ligand library rank against the shared ABL1
+        kinase-domain target?
+      interpretation_scope: Learning, small-set ranking, and early hypothesis generation
+        only
+      target_name: Human ABL1 kinase domain
+      target_family: ABL1 kinase domain
+      disease_area: small ligand ranking
+      ligand_role: candidate ligand set
+      source_pdb: 2HYY
+      protein_sequence_length: 273
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+- alias: ligand_library_loader
+  path: models/input_assembler
+  parameters:
+    workflow_name: Batch Ligand Ranking
+    workflow_kind: batch
     default_protein_sequence: VSPNYDKWEMERTDITMKHKLGGGQYGEVYEGVWKKYSLTVAVKTLKEDTMEVEEFLKEAAVMKEIKHPNLVQLLGVCTREPPFYIITEFMTYGNLLDYLRECNRQEVNAVVLLYMATQISSAMEYLEKKNFIHRDLAARNCLVGENHLVKVADFGLSRLMTGDTYTAHAGAKFPIKWTAPESLAYNKFSIKSDVWAFGVLLWEIATYGMSPYPGIDLSQVYELLEKDYRMERPEGCPEKVYELMRACWQWNPSDRPSFAEIHQAFETMFQES
+    default_ligand_csv: |
+      name,smiles,source
+      Imatinib,CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem CID 5291
+      Dasatinib,CC1=C(C(=CC=C1)Cl)NC(=O)C2=CN=C(S2)NC3=CC(=NC(=N3)C)N4CCN(CC4)CCO,PubChem CID 3062316
+      Nilotinib,CC1=C(C=C(C=C1)C(=O)NC2=CC(=CC(=C2)C(F)(F)F)N3C=C(N=C3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem CID 644241
     default_run_options:
       workflow_name: Batch Ligand Ranking
       workflow_context: Guided Boltz-2 batch ligand ranking workflow using ABL1 kinase-domain
@@ -30,6 +57,11 @@ models:
       - Imatinib
       - Dasatinib
       - Nilotinib
+    integration_step: 0.01
+- alias: boltz_batch_ligand_ranker
+  path: models/core
+  parameters:
+    accelerator: gpu
     runtime_mode: managed
     use_msa_server: true
     output_format: mmcif
@@ -37,49 +69,69 @@ models:
     recycling_steps: 3
     sampling_steps: 200
     diffusion_samples: 1
-    default_ligand_csv: 'name,smiles,source
-
-      Imatinib,CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem
-      CID 5291
-
-      Dasatinib,CC1=C(C(=CC=C1)Cl)NC(=O)C2=CN=C(S2)NC3=CC(=NC(=N3)C)N4CCN(CC4)CCO,PubChem
-      CID 3062316
-
-      Nilotinib,CC1=C(C=C(C=C1)C(=O)NC2=CC(=CC(=C2)C(F)(F)F)N3C=C(N=C3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem
-      CID 644241
-
-      '
     max_ligands: 3
+- alias: ranking_interpreter
+  path: models/interpreter
+  parameters:
+    workflow_name: Batch Ligand Ranking
+    mode: batch
+    core_alias: boltz_batch_ligand_ranker
+    caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+      for hypothesis generation; they are not experimental binding, potency, selectivity,
+      clinical, or efficacy evidence.
+    integration_step: 0.01
 - alias: visualisation
   path: models/visualisation
   parameters:
     integration_step: 0.01
+    source_alias: boltz_batch_ligand_ranker
+    mode: boltz_batch
+    lab_title: 'Boltz Workflow: Batch Ligand Ranking'
+    context_alias: batch_target_context
+    assembler_alias: ligand_library_loader
+    interpreter_alias: ranking_interpreter
 io:
   inputs:
   - name: protein_sequence
     label: ABL1 Kinase Sequence
-    description: Amino-acid sequence for the shared ABL1 kinase-domain target; maps directly to the Boltz-2 protein input for each ligand run.
-    maps_to: boltz_batch_ligand_ranker.protein_sequence
+    description: Amino-acid sequence for the shared ABL1 kinase-domain target; maps
+      directly to the Boltz-2 protein input for each ligand run.
+    maps_to: ligand_library_loader.protein_sequence
   - name: ligand_csv
     label: Candidate Ligand CSV
-    description: CSV text with candidate ligand names and SMILES strings; each row is passed to Boltz-2 as a separate ligand input.
-    maps_to: boltz_batch_ligand_ranker.ligand_csv
+    description: CSV text with candidate ligand names and SMILES strings; each row
+      is passed to Boltz-2 as a separate ligand input.
+    maps_to: ligand_library_loader.ligand_csv
   - name: msa_path
     label: Precomputed MSA Path
-    description: Optional path to a precomputed MSA file; leave unset when the configured Boltz MSA server is used.
-    maps_to: boltz_batch_ligand_ranker.msa_path
+    description: Optional path to a precomputed MSA file; leave unset when the configured
+      Boltz MSA server is used.
+    maps_to: ligand_library_loader.msa_path
   - name: run_options
     label: Boltz Batch Run Options
-    description: Optional structured controls for the batch workflow, including source metadata, sampling settings, and interpretation scope.
-    maps_to: boltz_batch_ligand_ranker.run_options
+    description: Optional structured controls for the batch workflow, including source
+      metadata, sampling settings, and interpretation scope.
+    maps_to: ligand_library_loader.run_options
   outputs:
+  - name: scenario_context
+    label: Workflow Scenario Context
+    description: Source-backed target, ligand, use-case, provenance, and caveat context
+      for this Boltz workflow.
+    maps_to: batch_target_context.scenario_context
+  - name: assembled_boltz_request
+    label: Assembled Boltz Request
+    description: Traceable summary of the protein, ligand, MSA, and run options prepared
+      for Boltz.
+    maps_to: ligand_library_loader.assembled_boltz_request
   - name: batch_summary
     label: Ranked Ligand Summary
-    description: Ranked ligand table with binder probability, affinity-like value, confidence, status, and caveat flags.
+    description: Ranked ligand table with binder probability, affinity-like value,
+      confidence, status, and caveat flags.
     maps_to: boltz_batch_ligand_ranker.batch_summary
   - name: affinity_summary
     label: Top Ligand Affinity-Style Summary
-    description: Parsed Boltz-2 binder probability and affinity-like outputs for the top-ranked completed ligand.
+    description: Parsed Boltz-2 binder probability and affinity-like outputs for the
+      top-ranked completed ligand.
     maps_to: boltz_batch_ligand_ranker.affinity_summary
   - name: confidence_summary
     label: Top Ligand Confidence Summary
@@ -87,28 +139,64 @@ io:
     maps_to: boltz_batch_ligand_ranker.confidence_summary
   - name: structure_artifacts
     label: Top Ligand Structure Artifacts
-    description: File-backed predicted complex structures for the top-ranked completed ligand.
+    description: File-backed predicted complex structures for the top-ranked completed
+      ligand.
     maps_to: boltz_batch_ligand_ranker.structure_artifacts
   - name: run_metadata
     label: Boltz Batch Run Metadata
-    description: Runtime status, per-ligand statuses, command metadata, logs, and caveats for the latest batch invocation.
+    description: Runtime status, per-ligand statuses, command metadata, logs, and
+      caveats for the latest batch invocation.
     maps_to: boltz_batch_ligand_ranker.run_metadata
+  - name: ranking_evidence
+    label: Conservative Ranking Evidence
+    description: Interpreted Boltz output evidence with request traceability and explicit
+      scientific caveats.
+    maps_to: ranking_interpreter.prediction_evidence
 wiring:
+- from: batch_target_context.scenario_context
+  to:
+  - ligand_library_loader.scenario_context
+  - ranking_interpreter.scenario_context
+  - visualisation.batch_target_context_scenario_context
+- from: ligand_library_loader.protein_sequence
+  to:
+  - boltz_batch_ligand_ranker.protein_sequence
+- from: ligand_library_loader.ligand_csv
+  to:
+  - boltz_batch_ligand_ranker.ligand_csv
+- from: ligand_library_loader.msa_path
+  to:
+  - boltz_batch_ligand_ranker.msa_path
+- from: ligand_library_loader.run_options
+  to:
+  - boltz_batch_ligand_ranker.run_options
+- from: ligand_library_loader.assembled_boltz_request
+  to:
+  - ranking_interpreter.assembled_boltz_request
+  - visualisation.ligand_library_loader_assembled_boltz_request
 - from: boltz_batch_ligand_ranker.batch_summary
   to:
   - visualisation.boltz_batch_ligand_ranker_batch_summary
+  - ranking_interpreter.boltz_batch_ligand_ranker_batch_summary
 - from: boltz_batch_ligand_ranker.affinity_summary
   to:
   - visualisation.boltz_batch_ligand_ranker_affinity_summary
+  - ranking_interpreter.boltz_batch_ligand_ranker_affinity_summary
 - from: boltz_batch_ligand_ranker.confidence_summary
   to:
   - visualisation.boltz_batch_ligand_ranker_confidence_summary
+  - ranking_interpreter.boltz_batch_ligand_ranker_confidence_summary
 - from: boltz_batch_ligand_ranker.structure_artifacts
   to:
   - visualisation.boltz_batch_ligand_ranker_structure_artifacts
+  - ranking_interpreter.boltz_batch_ligand_ranker_structure_artifacts
 - from: boltz_batch_ligand_ranker.run_metadata
   to:
   - visualisation.boltz_batch_ligand_ranker_run_metadata
+  - ranking_interpreter.boltz_batch_ligand_ranker_run_metadata
+- from: ranking_interpreter.prediction_evidence
+  to:
+  - visualisation.ranking_interpreter_prediction_evidence
 runtime:
   duration: 0.01
   communication_step: 0.01

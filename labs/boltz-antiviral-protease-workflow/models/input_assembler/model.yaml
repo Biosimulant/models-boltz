@@ -1,0 +1,56 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Antiviral Protease Input Assembly'
+description: Resolves public inputs and curated defaults into exact Boltz request
+  inputs.
+standard: other
+tags:
+- boltz-workflow
+- input-assembly
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.boltz_input_assembler:BoltzInputAssemblerModel
+  init_kwargs:
+    workflow_name: Antiviral Protease Workflow
+    workflow_kind: single
+    default_protein_sequence: SGFRKMAFPSGKVEGCMVQVTCGTTTLNGLWLDDVVYCPRHVICTSEDMLNPNYEDLLIRKSNHNFLVQAGNVQLRVIGHSMQNCVLKLKVDTANPKTPKYKFVRIQPGQTFSVLACYNGSPSGVYQCAMRPNFTIKGSFLNGSCGSVGFNIDYDCVSFCYMHHMELPTGVHAGTDLEGNFYGPFVDRQTAQAAGTDTTITVNVLAWLYAAVINGDRWFLNRFTTTLNDFNLVAMKYNYEPLTQDHVDILGPLSAQTGIAVLDMCASLKELLQNGMNGRTILGSALLEDEFTPFDVVRQCSGVTFQ
+    default_ligand_smiles: CC1([C@@H]2[C@H]1[C@H](N(C2)C(=O)[C@H](C(C)(C)C)NC(=O)C(F)(F)F)C(=O)N[C@@H](C[C@@H]3CCNC3=O)C#N)C
+    default_run_options:
+      workflow_name: Antiviral Protease Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for SARS-CoV-2 3C-like
+        main protease and Nirmatrelvir reference protease inhibitor
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: SARS-CoV-2 3C-like main protease
+      ligand_name: Nirmatrelvir reference protease inhibitor
+      source_pdb: 7VH8
+      source_pubchem_cid: '155903259'
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs:
+  - name: scenario_context
+    description: Workflow context from the context stage.
+  - name: protein_sequence
+    description: Optional protein sequence override.
+  - name: ligand_smiles
+    description: Optional ligand SMILES override.
+  - name: msa_path
+    description: Optional precomputed MSA path.
+  - name: run_options
+    description: Optional Boltz run option overrides.
+  outputs:
+  - name: protein_sequence
+    description: Resolved protein sequence passed to Boltz.
+  - name: ligand_smiles
+    description: Resolved ligand SMILES passed to Boltz.
+  - name: msa_path
+    description: Resolved MSA path.
+  - name: run_options
+    description: Merged Boltz run options.
+  - name: assembled_boltz_request
+    description: Traceability summary for the prepared Boltz request.

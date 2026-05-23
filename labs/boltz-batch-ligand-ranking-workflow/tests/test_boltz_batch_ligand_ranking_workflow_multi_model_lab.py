@@ -5,31 +5,57 @@ from pathlib import Path
 import yaml
 
 
-def test_lab_manifest_uses_embedded_visualisation_model():
+EXPECTED_ALIASES = ["batch_target_context", "ligand_library_loader", "boltz_batch_ligand_ranker", "ranking_interpreter", "visualisation"]
+
+
+def _manifest():
     lab_dir = Path(__file__).resolve().parents[1]
-    manifest = yaml.safe_load((lab_dir / "lab.yaml").read_text())
+    return yaml.safe_load((lab_dir / "lab.yaml").read_text())
+
+
+def test_lab_manifest_uses_multi_stage_workflow_graph():
+    manifest = _manifest()
     model_aliases = [entry["alias"] for entry in manifest["models"]]
-    assert "boltz_batch_ligand_ranker" in model_aliases
-    assert "visualisation" in model_aliases
+    assert model_aliases == EXPECTED_ALIASES
     assert all(str(entry["path"]).startswith("models/") for entry in manifest["models"])
+    assert all(not str(entry["maps_to"]).startswith("visualisation.") for entry in manifest["io"]["outputs"])
 
-    assert not any(str(entry["maps_to"]).startswith("visualisation.") for entry in manifest["io"]["outputs"])
-
-    wiring_targets = {target for entry in manifest["wiring"] for target in entry["to"]}
+    wiring = manifest["wiring"]
+    wiring_sources = {entry["from"] for entry in wiring}
+    wiring_targets = {target for entry in wiring for target in entry["to"]}
+    assert "batch_target_context.scenario_context" in wiring_sources
+    assert "ligand_library_loader.assembled_boltz_request" in wiring_sources
+    assert "ranking_interpreter.prediction_evidence" in wiring_sources
     assert any(target.startswith("visualisation.") for target in wiring_targets)
 
 
-def test_lab_manifest_is_guided_boltz_batch_workflow():
-    lab_dir = Path(__file__).resolve().parents[1]
-    manifest = yaml.safe_load((lab_dir / "lab.yaml").read_text())
-
-    assert manifest["title"] == "Boltz Workflow: Batch Ligand Ranking"
+def test_lab_manifest_keeps_boltz_prediction_as_only_scientific_runner():
+    manifest = _manifest()
+    assert manifest["title"].startswith("Boltz Workflow:")
     assert "boltz-workflow" in manifest["tags"]
     assert "batch-ranking" in manifest["tags"]
 
-    core = next(entry for entry in manifest["models"] if entry["alias"] == "boltz_batch_ligand_ranker")
-    params = core["parameters"]
-    assert params["default_protein_sequence"]
-    assert params["default_ligand_csv"]
-    assert params["max_ligands"] == 3
-    assert params["default_run_options"]["workflow_name"] == "Batch Ligand Ranking"
+    context_model = next(entry for entry in manifest["models"] if entry["alias"] == "batch_target_context")
+    assembler_model = next(entry for entry in manifest["models"] if entry["alias"] == "ligand_library_loader")
+    core_model = next(entry for entry in manifest["models"] if entry["alias"] == "boltz_batch_ligand_ranker")
+    interpreter_model = next(entry for entry in manifest["models"] if entry["alias"] == "ranking_interpreter")
+
+    assert context_model["parameters"]["scenario"]["caveat"]
+    assert assembler_model["parameters"]["default_protein_sequence"]
+    assert assembler_model["parameters"]["default_ligand_csv"]
+    assert assembler_model["parameters"]["default_run_options"]["workflow_name"]
+    assert "default_protein_sequence" not in core_model["parameters"]
+    assert "default_ligand_smiles" not in core_model["parameters"]
+    assert "default_ligand_csv" not in core_model["parameters"]
+    assert core_model["parameters"]["accelerator"] == "gpu"
+    assert interpreter_model["parameters"]["core_alias"] == "boltz_batch_ligand_ranker"
+
+
+def test_public_ports_route_through_workflow_stages():
+    manifest = _manifest()
+    input_maps = [entry["maps_to"] for entry in manifest["io"]["inputs"]]
+    assert all(item.startswith("ligand_library_loader.") for item in input_maps)
+    output_maps = [entry["maps_to"] for entry in manifest["io"]["outputs"]]
+    assert "batch_target_context.scenario_context" in output_maps
+    assert "ligand_library_loader.assembled_boltz_request" in output_maps
+    assert "ranking_interpreter.prediction_evidence" in output_maps

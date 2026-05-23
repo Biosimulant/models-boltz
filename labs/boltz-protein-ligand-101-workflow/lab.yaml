@@ -1,84 +1,175 @@
-schema_version: "2.0"
-title: "Boltz Workflow: Protein-Ligand 101"
-description: "Guided Boltz-2 workflow for learning how a protein sequence and ligand SMILES become a predicted complex, binder probability, affinity-like value, confidence metrics, and reproducible report context."
+schema_version: '2.0'
+title: 'Boltz Workflow: Protein-Ligand 101'
+description: Guided Boltz-2 workflow for learning how a protein sequence and ligand
+  SMILES become a predicted complex, binder probability, affinity-like value, confidence
+  metrics, and reproducible report context.
 tags:
-  - boltz-workflow
-  - boltz
-  - protein-ligand
-  - affinity
-  - structural-biology
-  - guided-workflow
-  - gpu
+- boltz-workflow
+- boltz
+- protein-ligand
+- affinity
+- structural-biology
+- guided-workflow
+- gpu
 models:
-  - alias: boltz_boltz2_affinity_predictor
-    path: models/core
-    parameters:
-      accelerator: gpu
-      default_protein_sequence: MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ
-      default_ligand_smiles: N[C@@H](Cc1ccc(O)cc1)C(=O)O
-      default_run_options:
-        workflow_name: Protein-Ligand 101
-        workflow_context: Guided single protein-ligand Boltz-2 example
-        interpretation_scope: Learning and early hypothesis generation only
-      runtime_mode: managed
-      use_msa_server: true
-      output_format: mmcif
-      override: true
-      recycling_steps: 3
-      sampling_steps: 200
-      diffusion_samples: 1
-  - alias: visualisation
-    path: models/visualisation
-    parameters:
-      integration_step: 0.01
+- alias: protein_ligand_tutorial_context
+  path: models/context
+  parameters:
+    scenario:
+      workflow_name: Protein-Ligand 101
+      workflow_context: Guided single protein-ligand Boltz-2 example
+      workflow_question: How does a source-backed protein sequence and ligand SMILES
+        become a Boltz-2 complex prediction?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_family: teaching protein-ligand example
+      disease_area: training workflow
+      ligand_role: teaching ligand
+      protein_sequence_length: 384
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+- alias: protein_ligand_setup
+  path: models/input_assembler
+  parameters:
+    workflow_name: Protein-Ligand 101
+    workflow_kind: single
+    default_protein_sequence: MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ
+    default_ligand_smiles: N[C@@H](Cc1ccc(O)cc1)C(=O)O
+    default_run_options:
+      workflow_name: Protein-Ligand 101
+      workflow_context: Guided single protein-ligand Boltz-2 example
+      interpretation_scope: Learning and early hypothesis generation only
+    integration_step: 0.01
+- alias: boltz_boltz2_affinity_predictor
+  path: models/core
+  parameters:
+    accelerator: gpu
+    runtime_mode: managed
+    use_msa_server: true
+    output_format: mmcif
+    override: true
+    recycling_steps: 3
+    sampling_steps: 200
+    diffusion_samples: 1
+- alias: boltz_prediction_interpreter
+  path: models/interpreter
+  parameters:
+    workflow_name: Protein-Ligand 101
+    mode: single
+    core_alias: boltz_boltz2_affinity_predictor
+    caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+      for hypothesis generation; they are not experimental binding, potency, selectivity,
+      clinical, or efficacy evidence.
+    integration_step: 0.01
+- alias: visualisation
+  path: models/visualisation
+  parameters:
+    integration_step: 0.01
+    source_alias: boltz_boltz2_affinity_predictor
+    mode: boltz
+    lab_title: 'Boltz Workflow: Protein-Ligand 101'
+    context_alias: protein_ligand_tutorial_context
+    assembler_alias: protein_ligand_setup
+    interpreter_alias: boltz_prediction_interpreter
 io:
   inputs:
-    - name: protein_sequence
-      label: Target Protein Sequence
-      description: Amino-acid sequence for the curated teaching target; maps directly to the Boltz-2 protein input.
-      maps_to: boltz_boltz2_affinity_predictor.protein_sequence
-    - name: ligand_smiles
-      label: Ligand SMILES
-      description: SMILES string for the curated teaching ligand; maps directly to the Boltz-2 ligand input.
-      maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
-    - name: msa_path
-      label: Precomputed MSA Path
-      description: Optional path to a precomputed MSA file; leave unset when the configured Boltz MSA server is used.
-      maps_to: boltz_boltz2_affinity_predictor.msa_path
-    - name: run_options
-      label: Boltz Run Options
-      description: Optional structured controls for the Boltz workflow, including sampling settings and interpretation scope.
-      maps_to: boltz_boltz2_affinity_predictor.run_options
+  - name: protein_sequence
+    label: Target Protein Sequence
+    description: Amino-acid sequence for the curated teaching target; maps directly
+      to the Boltz-2 protein input.
+    maps_to: protein_ligand_setup.protein_sequence
+  - name: ligand_smiles
+    label: Ligand SMILES
+    description: SMILES string for the curated teaching ligand; maps directly to the
+      Boltz-2 ligand input.
+    maps_to: protein_ligand_setup.ligand_smiles
+  - name: msa_path
+    label: Precomputed MSA Path
+    description: Optional path to a precomputed MSA file; leave unset when the configured
+      Boltz MSA server is used.
+    maps_to: protein_ligand_setup.msa_path
+  - name: run_options
+    label: Boltz Run Options
+    description: Optional structured controls for the Boltz workflow, including sampling
+      settings and interpretation scope.
+    maps_to: protein_ligand_setup.run_options
   outputs:
-    - name: affinity_summary
-      label: Affinity-Style Summary
-      description: Parsed Boltz-2 binder probability and affinity-like outputs for this protein-ligand prediction.
-      maps_to: boltz_boltz2_affinity_predictor.affinity_summary
-    - name: confidence_summary
-      label: Structure Confidence Summary
-      description: Parsed Boltz-2 confidence outputs for the predicted protein-ligand complex.
-      maps_to: boltz_boltz2_affinity_predictor.confidence_summary
-    - name: structure_artifacts
-      label: Predicted Complex Structure Artifacts
-      description: File-backed predicted complex structures used by the 3D visualisation.
-      maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
-    - name: run_metadata
-      label: Boltz Run Metadata
-      description: Runtime status, command metadata, logs, and caveats for the latest Boltz invocation.
-      maps_to: boltz_boltz2_affinity_predictor.run_metadata
+  - name: scenario_context
+    label: Workflow Scenario Context
+    description: Source-backed target, ligand, use-case, provenance, and caveat context
+      for this Boltz workflow.
+    maps_to: protein_ligand_tutorial_context.scenario_context
+  - name: assembled_boltz_request
+    label: Assembled Boltz Request
+    description: Traceable summary of the protein, ligand, MSA, and run options prepared
+      for Boltz.
+    maps_to: protein_ligand_setup.assembled_boltz_request
+  - name: affinity_summary
+    label: Affinity-Style Summary
+    description: Parsed Boltz-2 binder probability and affinity-like outputs for this
+      protein-ligand prediction.
+    maps_to: boltz_boltz2_affinity_predictor.affinity_summary
+  - name: confidence_summary
+    label: Structure Confidence Summary
+    description: Parsed Boltz-2 confidence outputs for the predicted protein-ligand
+      complex.
+    maps_to: boltz_boltz2_affinity_predictor.confidence_summary
+  - name: structure_artifacts
+    label: Predicted Complex Structure Artifacts
+    description: File-backed predicted complex structures used by the 3D visualisation.
+    maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
+  - name: run_metadata
+    label: Boltz Run Metadata
+    description: Runtime status, command metadata, logs, and caveats for the latest
+      Boltz invocation.
+    maps_to: boltz_boltz2_affinity_predictor.run_metadata
+  - name: prediction_evidence
+    label: Conservative Prediction Evidence
+    description: Interpreted Boltz output evidence with request traceability and explicit
+      scientific caveats.
+    maps_to: boltz_prediction_interpreter.prediction_evidence
 wiring:
-  - from: boltz_boltz2_affinity_predictor.affinity_summary
-    to:
-      - visualisation.boltz_boltz2_affinity_predictor_affinity_summary
-  - from: boltz_boltz2_affinity_predictor.confidence_summary
-    to:
-      - visualisation.boltz_boltz2_affinity_predictor_confidence_summary
-  - from: boltz_boltz2_affinity_predictor.structure_artifacts
-    to:
-      - visualisation.boltz_boltz2_affinity_predictor_structure_artifacts
-  - from: boltz_boltz2_affinity_predictor.run_metadata
-    to:
-      - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+- from: protein_ligand_tutorial_context.scenario_context
+  to:
+  - protein_ligand_setup.scenario_context
+  - boltz_prediction_interpreter.scenario_context
+  - visualisation.protein_ligand_tutorial_context_scenario_context
+- from: protein_ligand_setup.protein_sequence
+  to:
+  - boltz_boltz2_affinity_predictor.protein_sequence
+- from: protein_ligand_setup.ligand_smiles
+  to:
+  - boltz_boltz2_affinity_predictor.ligand_smiles
+- from: protein_ligand_setup.msa_path
+  to:
+  - boltz_boltz2_affinity_predictor.msa_path
+- from: protein_ligand_setup.run_options
+  to:
+  - boltz_boltz2_affinity_predictor.run_options
+- from: protein_ligand_setup.assembled_boltz_request
+  to:
+  - boltz_prediction_interpreter.assembled_boltz_request
+  - visualisation.protein_ligand_setup_assembled_boltz_request
+- from: boltz_boltz2_affinity_predictor.affinity_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_affinity_summary
+  - boltz_prediction_interpreter.boltz_boltz2_affinity_predictor_affinity_summary
+- from: boltz_boltz2_affinity_predictor.confidence_summary
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_confidence_summary
+  - boltz_prediction_interpreter.boltz_boltz2_affinity_predictor_confidence_summary
+- from: boltz_boltz2_affinity_predictor.structure_artifacts
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_structure_artifacts
+  - boltz_prediction_interpreter.boltz_boltz2_affinity_predictor_structure_artifacts
+- from: boltz_boltz2_affinity_predictor.run_metadata
+  to:
+  - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+  - boltz_prediction_interpreter.boltz_boltz2_affinity_predictor_run_metadata
+- from: boltz_prediction_interpreter.prediction_evidence
+  to:
+  - visualisation.boltz_prediction_interpreter_prediction_evidence
 runtime:
   duration: 0.01
   communication_step: 0.01

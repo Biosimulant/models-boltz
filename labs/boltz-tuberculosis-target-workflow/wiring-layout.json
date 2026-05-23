@@ -1,18 +1,41 @@
 {
-  "edges": [],
+  "edges": [
+
+  ],
   "nodes": [
+    {
+      "id": "tuberculosis_target_context",
+      "position": {
+        "x": 0,
+        "y": -140
+      }
+    },
+    {
+      "id": "inha_ligand_setup",
+      "position": {
+        "x": 330,
+        "y": 0
+      }
+    },
     {
       "id": "boltz_boltz2_affinity_predictor",
       "position": {
-        "x": 0,
+        "x": 680,
+        "y": 0
+      }
+    },
+    {
+      "id": "tb_prediction_interpreter",
+      "position": {
+        "x": 1030,
         "y": 0
       }
     },
     {
       "id": "visualisation",
       "position": {
-        "x": 444,
-        "y": 390
+        "x": 1380,
+        "y": 0
       }
     }
   ]

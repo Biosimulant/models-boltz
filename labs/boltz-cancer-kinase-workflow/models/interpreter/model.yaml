@@ -1,0 +1,43 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Cancer Kinase Prediction Interpreter'
+description: Conservative interpretation of raw Boltz outputs with traceable request
+  evidence and caveats.
+standard: other
+tags:
+- boltz-workflow
+- interpretation
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.boltz_prediction_interpreter:BoltzPredictionInterpreterModel
+  init_kwargs:
+    workflow_name: Cancer Kinase Workflow
+    mode: single
+    core_alias: boltz_boltz2_affinity_predictor
+    caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+      for hypothesis generation; they are not experimental binding, potency, selectivity,
+      clinical, or efficacy evidence.
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs:
+  - name: scenario_context
+    description: Workflow context from the context stage.
+  - name: assembled_boltz_request
+    description: Prepared request summary from the input assembler.
+  - name: boltz_boltz2_affinity_predictor_affinity_summary
+    description: Raw affinity_summary output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_confidence_summary
+    description: Raw confidence_summary output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_structure_artifacts
+    description: Raw structure_artifacts output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_run_metadata
+    description: Raw run_metadata output from the Boltz prediction stage.
+  outputs:
+  - name: prediction_evidence
+    description: Conservative interpreted Boltz evidence and caveats.

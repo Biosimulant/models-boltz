@@ -1,0 +1,56 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Malaria Binding Input Assembly'
+description: Resolves public inputs and curated defaults into exact Boltz request
+  inputs.
+standard: other
+tags:
+- boltz-workflow
+- input-assembly
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.boltz_input_assembler:BoltzInputAssemblerModel
+  init_kwargs:
+    workflow_name: Malaria Binding Workflow
+    workflow_kind: single
+    default_protein_sequence: QMNYEEVIKKYRGEENFDHAAYDWRLHSGVTPVKDQKNCGSCWAFSSIGSVESQYAIRKNKLITLSEQELVDCSFKNYGCNGGLINNAFEDMIELGGICPDGDYPYVSDAPNLCNIDRCTEKYGIKNYLSVPDNKLKEALRFLGPISISVAVSDDFAFYKEGIFDGECGDQLNHAVMLVGFGMKEIVNPLTKKGEKHYYYIIKNSWGQQWGERGFINIETDESGLMRKCGLGTDAFIPLIE
+    default_ligand_smiles: CC(C)C[C@@H](C(=O)NCCCCN=C(N)N)NC(=O)[C@@H]1[C@H](O1)C(=O)O
+    default_run_options:
+      workflow_name: Malaria Binding Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Plasmodium falciparum
+        falcipain-2 cysteine protease and E-64 reference cysteine-protease inhibitor
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Plasmodium falciparum falcipain-2 cysteine protease
+      ligand_name: E-64 reference cysteine-protease inhibitor
+      source_pdb: 3BPF
+      source_pubchem_cid: '123985'
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs:
+  - name: scenario_context
+    description: Workflow context from the context stage.
+  - name: protein_sequence
+    description: Optional protein sequence override.
+  - name: ligand_smiles
+    description: Optional ligand SMILES override.
+  - name: msa_path
+    description: Optional precomputed MSA path.
+  - name: run_options
+    description: Optional Boltz run option overrides.
+  outputs:
+  - name: protein_sequence
+    description: Resolved protein sequence passed to Boltz.
+  - name: ligand_smiles
+    description: Resolved ligand SMILES passed to Boltz.
+  - name: msa_path
+    description: Resolved MSA path.
+  - name: run_options
+    description: Merged Boltz run options.
+  - name: assembled_boltz_request
+    description: Traceability summary for the prepared Boltz request.

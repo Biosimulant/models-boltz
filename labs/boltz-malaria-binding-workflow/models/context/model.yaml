@@ -1,0 +1,43 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Malaria Binding Context'
+description: Source-backed target, ligand, use-case, provenance, and caveat context
+  for the workflow.
+standard: other
+tags:
+- boltz-workflow
+- context
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.workflow_context:WorkflowContextModel
+  init_kwargs:
+    scenario:
+      workflow_name: Malaria Binding Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Plasmodium falciparum
+        falcipain-2 cysteine protease and E-64 reference cysteine-protease inhibitor
+      workflow_question: What does Boltz-2 predict for this malaria-related protease
+        and reference inhibitor-like ligand?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Plasmodium falciparum falcipain-2 cysteine protease
+      target_family: falcipain-2 cysteine protease
+      disease_area: malaria target exploration
+      ligand_name: E-64 reference cysteine-protease inhibitor
+      ligand_role: reference cysteine-protease inhibitor
+      source_pdb: 3BPF
+      source_pubchem_cid: '123985'
+      protein_sequence_length: 241
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs: []
+  outputs:
+  - name: scenario_context
+    description: Curated target, ligand, provenance, and caveat context.

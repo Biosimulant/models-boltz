@@ -1,0 +1,56 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Tuberculosis Target Input Assembly'
+description: Resolves public inputs and curated defaults into exact Boltz request
+  inputs.
+standard: other
+tags:
+- boltz-workflow
+- input-assembly
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.boltz_input_assembler:BoltzInputAssemblerModel
+  init_kwargs:
+    workflow_name: Tuberculosis Target Workflow
+    workflow_kind: single
+    default_protein_sequence: MTGLLDGKRILVSGIITDSSIAFHIARVAQEQGAQLVLTGFDRLRLIQRITDRLPAKAPLLELDVQNEEHLASLAGRVTEAIGAGNKLDGVVHSIGFMPQTGMGINPFFDAPYADVSKGIHISAYSYASMAKALLPIMNPGGSIVGMDFDPSRAMPAYNWMTVAKSALESVNRFVAREAGKYGVRSNLVAAGPIRTLAMSAIVGGALGEEAGAQIQLLEEGWDQRAPIGWNMKDATPVAKTVCALLSDWLPATTGDIIYADGGAHTQLL
+    default_ligand_smiles: C1=CC(=C(C=C1Cl)O)OC2=C(C=C(C=C2)Cl)Cl
+    default_run_options:
+      workflow_name: Tuberculosis Target Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Mycobacterium tuberculosis
+        InhA enoyl-ACP reductase and Triclosan reference inhibitor-like ligand
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Mycobacterium tuberculosis InhA enoyl-ACP reductase
+      ligand_name: Triclosan reference inhibitor-like ligand
+      source_pdb: 3FNE
+      source_pubchem_cid: '5564'
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs:
+  - name: scenario_context
+    description: Workflow context from the context stage.
+  - name: protein_sequence
+    description: Optional protein sequence override.
+  - name: ligand_smiles
+    description: Optional ligand SMILES override.
+  - name: msa_path
+    description: Optional precomputed MSA path.
+  - name: run_options
+    description: Optional Boltz run option overrides.
+  outputs:
+  - name: protein_sequence
+    description: Resolved protein sequence passed to Boltz.
+  - name: ligand_smiles
+    description: Resolved ligand SMILES passed to Boltz.
+  - name: msa_path
+    description: Resolved MSA path.
+  - name: run_options
+    description: Merged Boltz run options.
+  - name: assembled_boltz_request
+    description: Traceability summary for the prepared Boltz request.

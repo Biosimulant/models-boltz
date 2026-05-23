@@ -6,7 +6,7 @@ The workflow is designed for learning, comparison against known examples, and ea
 
 ## Workflow Status
 
-This lab validates locally, exports as a portable `.bsilab` package, and has a successful private pre-publication GPU-backed run. It is not published yet. Publication should wait for explicit approval and then the Hub workflow card can be switched from `Coming soon` to the published lab id.
+This lab validates locally, exports as a portable `.bsilab` package, and has a successful private pre-publication GPU-backed run. It is published on Biosimulant Hub and now uses a multi-stage Compose graph. The graph separates source-backed context, input assembly, Boltz-2 prediction, conservative interpretation, and visual reporting.
 
 Publication checklist:
 
@@ -17,7 +17,7 @@ Publication checklist:
 - at least one real GPU run completes: complete
 - run results include structure, affinity, confidence, metadata, and visuals: complete
 - screenshots/assets are captured from the real run: complete
-- Hub workflow card is updated with the published lab id: pending
+- Hub workflow card is public and points at the published lab id: complete
 
 
 ## Pre-Publication Run Evidence
@@ -63,6 +63,21 @@ When run, the workflow:
 3. Parses the top-ranked structure artifact.
 4. Parses Boltz-2 affinity and confidence summaries.
 5. Emits Biosimulant visuals and report-ready outputs.
+
+<!-- BIOSIMULANT_WORKFLOW_GRAPH_START -->
+## Compose Workflow Graph
+
+The published workflow is intentionally split into real BioSimulant modules:
+
+1. `malaria_target_context` emits source-backed target, ligand, disease/use-case, provenance, and caveat context.
+2. `falcipain_ligand_setup` resolves the public protein, ligand, MSA, and run-option inputs into the exact Boltz request.
+3. `boltz_boltz2_affinity_predictor` runs the unchanged Boltz-2 scientific wrapper.
+4. `malaria_prediction_interpreter` converts raw Boltz outputs into conservative evidence fields without adding new biological claims.
+5. `visualisation` renders the 3D structure, confidence/affinity summaries, source context, request traceability, and Q/A caveat cards.
+
+This makes the Compose view match the workflow promise while keeping Boltz-2 as the only predictive scientific model. The surrounding modules are provenance, request assembly, interpretation, and presentation stages.
+
+<!-- BIOSIMULANT_WORKFLOW_GRAPH_END -->
 
 ## Inputs
 

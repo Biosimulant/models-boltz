@@ -1,0 +1,43 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Antiviral Protease Context'
+description: Source-backed target, ligand, use-case, provenance, and caveat context
+  for the workflow.
+standard: other
+tags:
+- boltz-workflow
+- context
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.workflow_context:WorkflowContextModel
+  init_kwargs:
+    scenario:
+      workflow_name: Antiviral Protease Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for SARS-CoV-2 3C-like
+        main protease and Nirmatrelvir reference protease inhibitor
+      workflow_question: What does Boltz-2 predict for this viral protease and reference
+        inhibitor-like ligand?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: SARS-CoV-2 3C-like main protease
+      target_family: viral 3C-like protease
+      disease_area: antiviral discovery
+      ligand_name: Nirmatrelvir reference protease inhibitor
+      ligand_role: reference protease inhibitor
+      source_pdb: 7VH8
+      source_pubchem_cid: '155903259'
+      protein_sequence_length: 306
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs: []
+  outputs:
+  - name: scenario_context
+    description: Curated target, ligand, provenance, and caveat context.

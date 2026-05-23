@@ -1,6 +1,7 @@
 schema_version: '2.0'
 title: Batch Ligand Ranking Workflow Visualisation
-description: Presentation model for the guided Batch Ligand Ranking Boltz workflow.
+description: 'Presentation model for the multi-stage Boltz Workflow: Batch Ligand
+  Ranking workflow.'
 standard: other
 tags:
 - boltz-workflow
@@ -14,7 +15,10 @@ biosim:
     integration_step: 0.01
     source_alias: boltz_batch_ligand_ranker
     mode: boltz_batch
-    lab_title: Batch Ligand Ranking Workflow
+    lab_title: 'Boltz Workflow: Batch Ligand Ranking'
+    context_alias: batch_target_context
+    assembler_alias: ligand_library_loader
+    interpreter_alias: ranking_interpreter
   communication_step: 0.01
 parameters:
 - name: integration_step
@@ -22,5 +26,21 @@ parameters:
   min: 0.0
   description: Sampling step for the visualisation model.
 io:
-  inputs: []
+  inputs:
+  - name: batch_target_context_scenario_context
+    description: Workflow context from the context stage.
+  - name: ligand_library_loader_assembled_boltz_request
+    description: Traceable request summary from input assembly.
+  - name: ranking_interpreter_prediction_evidence
+    description: Conservative interpreted prediction evidence.
+  - name: boltz_batch_ligand_ranker_batch_summary
+    description: Raw batch_summary output from the Boltz prediction stage.
+  - name: boltz_batch_ligand_ranker_affinity_summary
+    description: Raw affinity_summary output from the Boltz prediction stage.
+  - name: boltz_batch_ligand_ranker_confidence_summary
+    description: Raw confidence_summary output from the Boltz prediction stage.
+  - name: boltz_batch_ligand_ranker_structure_artifacts
+    description: Raw structure_artifacts output from the Boltz prediction stage.
+  - name: boltz_batch_ligand_ranker_run_metadata
+    description: Raw run_metadata output from the Boltz prediction stage.
   outputs: []

@@ -5,7 +5,7 @@
   "source": "local",
   "hub_id": "64c7f06d-f307-4169-b600-1e5dc080f407",
   "created_at": "2026-05-03 22:09:44",
-  "last_synced_at": "2026-05-15T11:55:08.769694+00:00",
-  "hub_manifest_hash": "8c99674ec96e9293c1d6a450abab93e14425a6dde5d8e858b3dd3a2138652e21",
+  "last_synced_at": "2026-05-23T14:47:00.883632+00:00",
+  "hub_manifest_hash": "c7125e5b0912787db7e4fc5f5666ef065143ebab202575b2552e1e8338ada1f9",
   "package_name": "boltz-boltz2affinitypredictor-lab"
 }

@@ -1,6 +1,7 @@
 schema_version: '2.0'
 title: Antiviral Protease Workflow Visualisation
-description: Presentation model for the guided Antiviral Protease Workflow Boltz workflow.
+description: 'Presentation model for the multi-stage Boltz Workflow: Antiviral Protease
+  workflow.'
 standard: other
 tags:
 - boltz-workflow
@@ -14,7 +15,10 @@ biosim:
     integration_step: 0.01
     source_alias: boltz_boltz2_affinity_predictor
     mode: boltz
-    lab_title: Antiviral Protease Workflow
+    lab_title: 'Boltz Workflow: Antiviral Protease'
+    context_alias: antiviral_target_context
+    assembler_alias: protease_ligand_setup
+    interpreter_alias: protease_prediction_interpreter
   communication_step: 0.01
 parameters:
 - name: integration_step
@@ -22,5 +26,19 @@ parameters:
   min: 0.0
   description: Sampling step for the visualisation model.
 io:
-  inputs: []
+  inputs:
+  - name: antiviral_target_context_scenario_context
+    description: Workflow context from the context stage.
+  - name: protease_ligand_setup_assembled_boltz_request
+    description: Traceable request summary from input assembly.
+  - name: protease_prediction_interpreter_prediction_evidence
+    description: Conservative interpreted prediction evidence.
+  - name: boltz_boltz2_affinity_predictor_affinity_summary
+    description: Raw affinity_summary output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_confidence_summary
+    description: Raw confidence_summary output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_structure_artifacts
+    description: Raw structure_artifacts output from the Boltz prediction stage.
+  - name: boltz_boltz2_affinity_predictor_run_metadata
+    description: Raw run_metadata output from the Boltz prediction stage.
   outputs: []

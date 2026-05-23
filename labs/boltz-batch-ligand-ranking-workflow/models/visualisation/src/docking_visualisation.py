@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026-present Biosimulant Team
 # SPDX-License-Identifier: Apache-2.0
-"""Dedicated visualisation model for docking labs."""
+"""Dedicated visualisation model for docking and Boltz workflow labs."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from typing import Any, Dict, Mapping, Optional
 from biosim import BioModule
 from biosim.signals import AcceptedSignalProfile, BioSignal, SignalSpec
 from biosim.signals import unwrap_payload as _signal_value
-
 
 
 def _record_input_spec(description: str) -> SignalSpec:
@@ -32,11 +31,17 @@ class DockingVisualisationModel(BioModule):
         source_alias: str = "core",
         mode: str = "vina",
         lab_title: str = "Docking Lab",
+        context_alias: str | None = None,
+        assembler_alias: str | None = None,
+        interpreter_alias: str | None = None,
     ) -> None:
         self.integration_step = float(integration_step)
         self.source_alias = source_alias
         self.mode = mode
         self.lab_title = lab_title
+        self.context_alias = context_alias
+        self.assembler_alias = assembler_alias
+        self.interpreter_alias = interpreter_alias
         self._inputs: Dict[str, BioSignal] = {}
 
     def inputs(self) -> dict[str, SignalSpec]:
@@ -46,11 +51,17 @@ class DockingVisualisationModel(BioModule):
             "boltz_batch": ["batch_summary", "affinity_summary", "confidence_summary", "structure_artifacts", "run_metadata"],
             "diffdock": ["pose_summary", "confidence_summary", "structure_artifacts", "run_metadata"],
         }
-        names = names_by_mode[self.mode]
-        return {
+        specs = {
             f"{self.source_alias}_{name}": _record_input_spec(f"Internal {name} input from the sibling core model.")
-            for name in names
+            for name in names_by_mode[self.mode]
         }
+        if self.context_alias:
+            specs[f"{self.context_alias}_scenario_context"] = _record_input_spec("Workflow target and caveat context.")
+        if self.assembler_alias:
+            specs[f"{self.assembler_alias}_assembled_boltz_request"] = _record_input_spec("Resolved Boltz request summary.")
+        if self.interpreter_alias:
+            specs[f"{self.interpreter_alias}_prediction_evidence"] = _record_input_spec("Conservative interpreted prediction evidence.")
+        return specs
 
     def outputs(self) -> dict[str, SignalSpec]:
         return {}
@@ -71,15 +82,88 @@ class DockingVisualisationModel(BioModule):
 
     def visualize(self) -> Optional[list[dict[str, Any]]]:
         if self.mode == "vina":
-            return self._visualize_vina()
-        if self.mode == "boltz":
-            return self._visualize_boltz()
-        if self.mode == "boltz_batch":
-            return self._visualize_boltz_batch()
-        return self._visualize_diffdock()
+            primary = self._visualize_vina()
+        elif self.mode == "boltz":
+            primary = self._visualize_boltz()
+        elif self.mode == "boltz_batch":
+            primary = self._visualize_boltz_batch()
+        else:
+            primary = self._visualize_diffdock()
+        workflow = self._workflow_visuals()
+        if primary and workflow:
+            return [*primary, *workflow]
+        if primary:
+            return primary
+        return workflow or None
 
     def _input_value(self, name: str) -> Any:
         return _signal_value(self._inputs.get(f"{self.source_alias}_{name}"))
+
+    def _stage_value(self, alias: str | None, name: str) -> Any:
+        if not alias:
+            return None
+        return _signal_value(self._inputs.get(f"{alias}_{name}"))
+
+    def _workflow_visuals(self) -> list[dict[str, Any]]:
+        visuals: list[dict[str, Any]] = []
+        context = self._stage_value(self.context_alias, "scenario_context")
+        assembled = self._stage_value(self.assembler_alias, "assembled_boltz_request")
+        evidence = self._stage_value(self.interpreter_alias, "prediction_evidence")
+        if isinstance(evidence, Mapping):
+            rows = [
+                ["Scientific question", str(evidence.get("scientific_question") or "")],
+                ["Observed answer", str(evidence.get("observed_answer") or "")],
+                ["Dominant module", str(evidence.get("dominant_module") or self.source_alias)],
+                ["Run status", str(evidence.get("run_status") or "")],
+                ["Caveat", str(evidence.get("caveat") or "")],
+            ]
+            visuals.append(
+                {
+                    "render": "table",
+                    "description": "Conservative interpretation of the current Boltz workflow run.",
+                    "data": {"title": f"{self.lab_title} - workflow answer", "columns": ["Prompt", "Answer"], "rows": rows},
+                }
+            )
+        if isinstance(context, Mapping):
+            fields = [
+                ("Target", context.get("target_name")),
+                ("Target family", context.get("target_family")),
+                ("Disease or use case", context.get("disease_area")),
+                ("Ligand", context.get("ligand_name")),
+                ("Ligand role", context.get("ligand_role")),
+                ("Source PDB", context.get("source_pdb")),
+                ("PubChem CID", context.get("source_pubchem_cid")),
+                ("Scope", context.get("interpretation_scope")),
+            ]
+            rows = [[label, str(value)] for label, value in fields if value not in (None, "")]
+            if rows:
+                visuals.append(
+                    {
+                        "render": "table",
+                        "description": "Source-backed target, ligand, and use-case context for this workflow.",
+                        "data": {"title": "Workflow target and ligand context", "columns": ["Field", "Value"], "rows": rows},
+                    }
+                )
+        if isinstance(assembled, Mapping):
+            fields = [
+                ("Workflow kind", assembled.get("workflow_kind")),
+                ("Protein sequence length", assembled.get("protein_sequence_length")),
+                ("Protein sequence SHA-256", assembled.get("protein_sequence_sha256")),
+                ("Ligand count", assembled.get("ligand_count")),
+                ("Ligand SMILES SHA-256", assembled.get("ligand_smiles_sha256")),
+                ("Ligand library SHA-256", assembled.get("ligand_library_sha256")),
+                ("MSA path supplied", assembled.get("msa_path_supplied")),
+            ]
+            rows = [[label, str(value)] for label, value in fields if value not in (None, "")]
+            if rows:
+                visuals.append(
+                    {
+                        "render": "table",
+                        "description": "Traceability summary for the assembled Boltz request.",
+                        "data": {"title": "Assembled Boltz request evidence", "columns": ["Field", "Value"], "rows": rows},
+                    }
+                )
+        return visuals
 
     def _visualize_vina(self) -> Optional[list[dict[str, Any]]]:
         run_metadata = self._input_value("run_metadata")
@@ -123,11 +207,7 @@ class DockingVisualisationModel(BioModule):
             {
                 "render": "table",
                 "description": "Ranked pose summary from the latest AutoDock Vina run.",
-                "data": {
-                    "title": "AutoDock Vina Pose Summary",
-                    "columns": ["Rank", "Affinity", "RMSD l.b.", "RMSD u.b.", "Pose File"],
-                    "rows": rows,
-                },
+                "data": {"title": "AutoDock Vina Pose Summary", "columns": ["Rank", "Affinity", "RMSD l.b.", "RMSD u.b.", "Pose File"], "rows": rows},
             },
         ]
 

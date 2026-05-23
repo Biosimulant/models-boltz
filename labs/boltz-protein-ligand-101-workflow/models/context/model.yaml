@@ -1,0 +1,38 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Protein-Ligand 101 Context'
+description: Source-backed target, ligand, use-case, provenance, and caveat context
+  for the workflow.
+standard: other
+tags:
+- boltz-workflow
+- context
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.workflow_context:WorkflowContextModel
+  init_kwargs:
+    scenario:
+      workflow_name: Protein-Ligand 101
+      workflow_context: Guided single protein-ligand Boltz-2 example
+      workflow_question: How does a source-backed protein sequence and ligand SMILES
+        become a Boltz-2 complex prediction?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_family: teaching protein-ligand example
+      disease_area: training workflow
+      ligand_role: teaching ligand
+      protein_sequence_length: 384
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs: []
+  outputs:
+  - name: scenario_context
+    description: Curated target, ligand, provenance, and caveat context.

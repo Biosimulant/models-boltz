@@ -15,10 +15,33 @@ tags:
 - protease
 - sars-cov-2
 models:
-- alias: boltz_boltz2_affinity_predictor
-  path: models/core
+- alias: antiviral_target_context
+  path: models/context
   parameters:
-    accelerator: gpu
+    scenario:
+      workflow_name: Antiviral Protease Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for SARS-CoV-2 3C-like
+        main protease and Nirmatrelvir reference protease inhibitor
+      workflow_question: What does Boltz-2 predict for this viral protease and reference
+        inhibitor-like ligand?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: SARS-CoV-2 3C-like main protease
+      target_family: viral 3C-like protease
+      disease_area: antiviral discovery
+      ligand_name: Nirmatrelvir reference protease inhibitor
+      ligand_role: reference protease inhibitor
+      source_pdb: 7VH8
+      source_pubchem_cid: '155903259'
+      protein_sequence_length: 306
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+- alias: protease_ligand_setup
+  path: models/input_assembler
+  parameters:
+    workflow_name: Antiviral Protease Workflow
+    workflow_kind: single
     default_protein_sequence: SGFRKMAFPSGKVEGCMVQVTCGTTTLNGLWLDDVVYCPRHVICTSEDMLNPNYEDLLIRKSNHNFLVQAGNVQLRVIGHSMQNCVLKLKVDTANPKTPKYKFVRIQPGQTFSVLACYNGSPSGVYQCAMRPNFTIKGSFLNGSCGSVGFNIDYDCVSFCYMHHMELPTGVHAGTDLEGNFYGPFVDRQTAQAAGTDTTITVNVLAWLYAAVINGDRWFLNRFTTTLNDFNLVAMKYNYEPLTQDHVDILGPLSAQTGIAVLDMCASLKELLQNGMNGRTILGSALLEDEFTPFDVVRQCSGVTFQ
     default_ligand_smiles: CC1([C@@H]2[C@H]1[C@H](N(C2)C(=O)[C@H](C(C)(C)C)NC(=O)C(F)(F)F)C(=O)N[C@@H](C[C@@H]3CCNC3=O)C#N)C
     default_run_options:
@@ -30,6 +53,11 @@ models:
       ligand_name: Nirmatrelvir reference protease inhibitor
       source_pdb: 7VH8
       source_pubchem_cid: '155903259'
+    integration_step: 0.01
+- alias: boltz_boltz2_affinity_predictor
+  path: models/core
+  parameters:
+    accelerator: gpu
     runtime_mode: managed
     use_msa_server: true
     output_format: mmcif
@@ -37,36 +65,68 @@ models:
     recycling_steps: 3
     sampling_steps: 200
     diffusion_samples: 1
+- alias: protease_prediction_interpreter
+  path: models/interpreter
+  parameters:
+    workflow_name: Antiviral Protease Workflow
+    mode: single
+    core_alias: boltz_boltz2_affinity_predictor
+    caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+      for hypothesis generation; they are not experimental binding, potency, selectivity,
+      clinical, or efficacy evidence.
+    integration_step: 0.01
 - alias: visualisation
   path: models/visualisation
   parameters:
     integration_step: 0.01
+    source_alias: boltz_boltz2_affinity_predictor
+    mode: boltz
+    lab_title: 'Boltz Workflow: Antiviral Protease'
+    context_alias: antiviral_target_context
+    assembler_alias: protease_ligand_setup
+    interpreter_alias: protease_prediction_interpreter
 io:
   inputs:
   - name: protein_sequence
     label: Target Protein Sequence
-    description: Amino-acid sequence for the curated SARS-CoV-2 3C-like protease target; maps directly to the Boltz-2 protein input.
-    maps_to: boltz_boltz2_affinity_predictor.protein_sequence
+    description: Amino-acid sequence for the curated SARS-CoV-2 3C-like protease target;
+      maps directly to the Boltz-2 protein input.
+    maps_to: protease_ligand_setup.protein_sequence
   - name: ligand_smiles
     label: Nirmatrelvir Ligand SMILES
-    description: SMILES string for the nirmatrelvir reference protease-inhibitor example; maps directly to the Boltz-2 ligand input.
-    maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
+    description: SMILES string for the nirmatrelvir reference protease-inhibitor example;
+      maps directly to the Boltz-2 ligand input.
+    maps_to: protease_ligand_setup.ligand_smiles
   - name: msa_path
     label: Precomputed MSA Path
-    description: Optional path to a precomputed MSA file; leave unset when the configured Boltz MSA server is used.
-    maps_to: boltz_boltz2_affinity_predictor.msa_path
+    description: Optional path to a precomputed MSA file; leave unset when the configured
+      Boltz MSA server is used.
+    maps_to: protease_ligand_setup.msa_path
   - name: run_options
     label: Boltz Run Options
-    description: Optional structured controls for the Boltz workflow, including source metadata, sampling settings, and interpretation scope.
-    maps_to: boltz_boltz2_affinity_predictor.run_options
+    description: Optional structured controls for the Boltz workflow, including source
+      metadata, sampling settings, and interpretation scope.
+    maps_to: protease_ligand_setup.run_options
   outputs:
+  - name: scenario_context
+    label: Workflow Scenario Context
+    description: Source-backed target, ligand, use-case, provenance, and caveat context
+      for this Boltz workflow.
+    maps_to: antiviral_target_context.scenario_context
+  - name: assembled_boltz_request
+    label: Assembled Boltz Request
+    description: Traceable summary of the protein, ligand, MSA, and run options prepared
+      for Boltz.
+    maps_to: protease_ligand_setup.assembled_boltz_request
   - name: affinity_summary
     label: Affinity-Style Summary
-    description: Parsed Boltz-2 binder probability and affinity-like outputs for this protease-ligand prediction.
+    description: Parsed Boltz-2 binder probability and affinity-like outputs for this
+      protease-ligand prediction.
     maps_to: boltz_boltz2_affinity_predictor.affinity_summary
   - name: confidence_summary
     label: Structure Confidence Summary
-    description: Parsed Boltz-2 confidence outputs for the predicted protease-ligand complex.
+    description: Parsed Boltz-2 confidence outputs for the predicted protease-ligand
+      complex.
     maps_to: boltz_boltz2_affinity_predictor.confidence_summary
   - name: structure_artifacts
     label: Predicted Complex Structure Artifacts
@@ -74,21 +134,55 @@ io:
     maps_to: boltz_boltz2_affinity_predictor.structure_artifacts
   - name: run_metadata
     label: Boltz Run Metadata
-    description: Runtime status, command metadata, logs, and caveats for the latest Boltz invocation.
+    description: Runtime status, command metadata, logs, and caveats for the latest
+      Boltz invocation.
     maps_to: boltz_boltz2_affinity_predictor.run_metadata
+  - name: prediction_evidence
+    label: Conservative Prediction Evidence
+    description: Interpreted Boltz output evidence with request traceability and explicit
+      scientific caveats.
+    maps_to: protease_prediction_interpreter.prediction_evidence
 wiring:
+- from: antiviral_target_context.scenario_context
+  to:
+  - protease_ligand_setup.scenario_context
+  - protease_prediction_interpreter.scenario_context
+  - visualisation.antiviral_target_context_scenario_context
+- from: protease_ligand_setup.protein_sequence
+  to:
+  - boltz_boltz2_affinity_predictor.protein_sequence
+- from: protease_ligand_setup.ligand_smiles
+  to:
+  - boltz_boltz2_affinity_predictor.ligand_smiles
+- from: protease_ligand_setup.msa_path
+  to:
+  - boltz_boltz2_affinity_predictor.msa_path
+- from: protease_ligand_setup.run_options
+  to:
+  - boltz_boltz2_affinity_predictor.run_options
+- from: protease_ligand_setup.assembled_boltz_request
+  to:
+  - protease_prediction_interpreter.assembled_boltz_request
+  - visualisation.protease_ligand_setup_assembled_boltz_request
 - from: boltz_boltz2_affinity_predictor.affinity_summary
   to:
   - visualisation.boltz_boltz2_affinity_predictor_affinity_summary
+  - protease_prediction_interpreter.boltz_boltz2_affinity_predictor_affinity_summary
 - from: boltz_boltz2_affinity_predictor.confidence_summary
   to:
   - visualisation.boltz_boltz2_affinity_predictor_confidence_summary
+  - protease_prediction_interpreter.boltz_boltz2_affinity_predictor_confidence_summary
 - from: boltz_boltz2_affinity_predictor.structure_artifacts
   to:
   - visualisation.boltz_boltz2_affinity_predictor_structure_artifacts
+  - protease_prediction_interpreter.boltz_boltz2_affinity_predictor_structure_artifacts
 - from: boltz_boltz2_affinity_predictor.run_metadata
   to:
   - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+  - protease_prediction_interpreter.boltz_boltz2_affinity_predictor_run_metadata
+- from: protease_prediction_interpreter.prediction_evidence
+  to:
+  - visualisation.protease_prediction_interpreter_prediction_evidence
 runtime:
   duration: 0.01
   communication_step: 0.01

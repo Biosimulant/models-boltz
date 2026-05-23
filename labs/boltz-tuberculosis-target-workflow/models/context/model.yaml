@@ -1,0 +1,43 @@
+schema_version: '2.0'
+title: 'Boltz Workflow: Tuberculosis Target Context'
+description: Source-backed target, ligand, use-case, provenance, and caveat context
+  for the workflow.
+standard: other
+tags:
+- boltz-workflow
+- context
+- provenance
+authors:
+- Biosimulant Team
+biosim:
+  entrypoint: src.workflow_context:WorkflowContextModel
+  init_kwargs:
+    scenario:
+      workflow_name: Tuberculosis Target Workflow
+      workflow_context: Guided Boltz-2 known-example workflow for Mycobacterium tuberculosis
+        InhA enoyl-ACP reductase and Triclosan reference inhibitor-like ligand
+      workflow_question: What does Boltz-2 predict for this tuberculosis target and
+        reference ligand?
+      interpretation_scope: Learning and early hypothesis generation only
+      target_name: Mycobacterium tuberculosis InhA enoyl-ACP reductase
+      target_family: InhA enoyl-ACP reductase
+      disease_area: tuberculosis target exploration
+      ligand_name: Triclosan reference inhibitor-like ligand
+      ligand_role: reference inhibitor-like ligand
+      source_pdb: 3FNE
+      source_pubchem_cid: '5564'
+      protein_sequence_length: 269
+      caveat: Boltz-2 outputs are computational structure and affinity-style predictions
+        for hypothesis generation; they are not experimental binding, potency, selectivity,
+        clinical, or efficacy evidence.
+    integration_step: 0.01
+  communication_step: 0.01
+runtime:
+  dependencies:
+    packages: []
+  python_version: '3.12'
+io:
+  inputs: []
+  outputs:
+  - name: scenario_context
+    description: Curated target, ligand, provenance, and caveat context.
