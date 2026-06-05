@@ -2,18 +2,80 @@ description: Multi-model lab with an embedded visualisation sibling for Boltz-2 
 io:
   inputs:
   - maps_to: boltz_boltz2_affinity_predictor.protein_sequence
+    value_type: string
+    format: sequence
+    required: false
+    ui:
+      control: textarea
+      rows: 6
     name: protein_sequence
     label: Target Protein Sequence
     description: Amino-acid sequence passed directly to the Boltz-2 protein input.
   - maps_to: boltz_boltz2_affinity_predictor.ligand_smiles
+    value_type: string
+    format: smiles
+    required: false
+    ui:
+      control: textarea
+      rows: 3
     name: ligand_smiles
     label: Ligand SMILES
     description: Ligand structure encoded as a SMILES string and passed directly to Boltz-2.
   - maps_to: boltz_boltz2_affinity_predictor.msa_path
+    value_type: file
+    format: a3m
+    required: false
+    file:
+      accept:
+      - .a3m
+      - .fasta
+      - .fa
+    ui:
+      control: file
     name: msa_path
     label: Precomputed MSA Path
     description: Optional path to a precomputed MSA file; leave unset when the MSA server is used.
+  - maps_to: boltz_boltz2_affinity_predictor.run_options.use_msa_server
+    name: use_msa_server
+    label: Use MSA Server
+    description: Use Boltz's MSA server instead of requiring a precomputed MSA file.
+    value_type: boolean
+    default: true
+  - maps_to: boltz_boltz2_affinity_predictor.run_options.sampling_steps
+    name: sampling_steps
+    label: Sampling Steps
+    description: Number of Boltz sampling steps for structure generation.
+    value_type: integer
+    default: 200
+  - maps_to: boltz_boltz2_affinity_predictor.run_options.recycling_steps
+    name: recycling_steps
+    label: Recycling Steps
+    description: Number of structure recycling steps.
+    value_type: integer
+    default: 3
+  - maps_to: boltz_boltz2_affinity_predictor.run_options.diffusion_samples
+    name: diffusion_samples
+    label: Diffusion Samples
+    description: Number of Boltz diffusion samples to generate.
+    value_type: integer
+    default: 1
+  - maps_to: boltz_boltz2_affinity_predictor.run_options.output_format
+    name: output_format
+    label: Output Format
+    description: Structure artifact format emitted by Boltz.
+    value_type: string
+    default: mmcif
+    allowed_values:
+    - mmcif
+    - pdb
   - maps_to: boltz_boltz2_affinity_predictor.run_options
+    value_type: record
+    format: json
+    required: false
+    advanced: true
+    ui:
+      control: json
+      rows: 6
     name: run_options
     label: Boltz Run Options
     description: Optional structured Boltz workflow controls such as MSA-server use, output format, and sampling settings.
@@ -53,6 +115,7 @@ models:
     integration_step: 0.01
   path: models/visualisation
 runtime:
+  python_version: '3.10'
   communication_step: 0.01
   duration: 0.01
   initial_inputs: {}

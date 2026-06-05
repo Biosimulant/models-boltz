@@ -97,21 +97,86 @@ io:
     description: Amino-acid sequence for the shared ABL1 kinase-domain target; maps
       directly to the Boltz-2 protein input for each ligand run.
     maps_to: ligand_library_loader.protein_sequence
+    value_type: string
+    format: sequence
+    required: false
+    ui:
+      control: textarea
+      rows: 6
   - name: ligand_csv
     label: Candidate Ligand CSV
     description: CSV text with candidate ligand names and SMILES strings; each row
       is passed to Boltz-2 as a separate ligand input.
     maps_to: ligand_library_loader.ligand_csv
+    value_type: file
+    format: csv
+    required: false
+    file:
+      accept:
+      - .csv
+      - text/csv
+    ui:
+      control: file
   - name: msa_path
     label: Precomputed MSA Path
     description: Optional path to a precomputed MSA file; leave unset when the configured
       Boltz MSA server is used.
     maps_to: ligand_library_loader.msa_path
+    value_type: file
+    format: a3m
+    required: false
+    file:
+      accept:
+      - .a3m
+      - .fasta
+      - .fa
+    ui:
+      control: file
+  - name: use_msa_server
+    label: Use MSA Server
+    description: Use Boltz's MSA server instead of requiring a precomputed MSA file.
+    maps_to: ligand_library_loader.run_options.use_msa_server
+    value_type: boolean
+    default: true
+  - name: sampling_steps
+    label: Sampling Steps
+    description: Number of Boltz sampling steps for structure generation.
+    maps_to: ligand_library_loader.run_options.sampling_steps
+    value_type: integer
+    default: 200
+  - name: recycling_steps
+    label: Recycling Steps
+    description: Number of structure recycling steps.
+    maps_to: ligand_library_loader.run_options.recycling_steps
+    value_type: integer
+    default: 3
+  - name: diffusion_samples
+    label: Diffusion Samples
+    description: Number of Boltz diffusion samples to generate.
+    maps_to: ligand_library_loader.run_options.diffusion_samples
+    value_type: integer
+    default: 1
+  - name: output_format
+    label: Output Format
+    description: Structure artifact format emitted by Boltz.
+    maps_to: ligand_library_loader.run_options.output_format
+    value_type: string
+    default: mmcif
+    allowed_values:
+    - mmcif
+    - pdb
   - name: run_options
     label: Boltz Batch Run Options
     description: Optional structured controls for the batch workflow, including source
       metadata, sampling settings, and interpretation scope.
     maps_to: ligand_library_loader.run_options
+    value_type: record
+    format: json
+    required: false
+    advanced: true
+    ui:
+      control: json
+      rows: 6
   outputs:
   - name: scenario_context
     label: Workflow Scenario Context
@@ -198,6 +263,7 @@ wiring:
   to:
   - visualisation.ranking_interpreter_prediction_evidence
 runtime:
+  python_version: '3.10'
   duration: 0.01
   communication_step: 0.01
   settle_steps: 1

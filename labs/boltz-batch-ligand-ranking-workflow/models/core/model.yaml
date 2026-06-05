@@ -18,10 +18,11 @@ biosim:
   communication_step: 0.01
   entrypoint: src.boltz2_batch_ligand_ranker:Boltz2BatchLigandRanker
 runtime:
+  python_version: '3.10'
   dependencies:
     packages:
-    - boltz[cuda]==2.0.2
-    - pyyaml==6.0.2
+      - boltz[cuda]==2.0.2
+      - pyyaml==6.0.2
   remote:
     requirements:
       accelerator: gpu

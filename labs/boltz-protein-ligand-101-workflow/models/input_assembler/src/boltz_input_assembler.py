@@ -8,6 +8,7 @@ import csv
 import hashlib
 import io
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from biosim import BioModule
@@ -37,6 +38,15 @@ def _coerce_string(value: Any, preferred_key: str) -> str | None:
             text = candidate.strip()
             return text or None
     return None
+
+
+def _coerce_ligand_value(value: Any, preferred_key: str) -> str | None:
+    text = _coerce_string(value, preferred_key)
+    if preferred_key == "csv" and text:
+        candidate_path = Path(text).expanduser()
+        if candidate_path.is_file():
+            return candidate_path.read_text(encoding="utf-8")
+    return text
 
 
 def _coerce_mapping(value: Any) -> dict[str, Any]:
@@ -125,7 +135,7 @@ class BoltzInputAssemblerModel(BioModule):
         ligand_name = "ligand_csv" if self.workflow_kind == "batch" else "ligand_smiles"
         ligand_key = "csv" if self.workflow_kind == "batch" else "smiles"
         ligand_value = (
-            _coerce_string(self._inputs.get(ligand_name), ligand_key)
+            _coerce_ligand_value(self._inputs.get(ligand_name), ligand_key)
             or (self.default_ligand_csv if self.workflow_kind == "batch" else self.default_ligand_smiles)
             or ""
         )

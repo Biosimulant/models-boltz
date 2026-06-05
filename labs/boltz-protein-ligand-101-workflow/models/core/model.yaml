@@ -9,6 +9,7 @@ biosim:
   communication_step: 0.01
   entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
 runtime:
+  python_version: '3.10'
   dependencies:
     packages:
       - boltz[cuda]==2.0.2

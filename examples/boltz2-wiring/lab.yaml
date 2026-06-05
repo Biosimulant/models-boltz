@@ -16,6 +16,7 @@ models:
   path: ../../labs/boltz-boltz2-affinity-predictor/models/core
 package: Biosimulant/models-boltz/examples/boltz2-wiring
 runtime:
+  python_version: '3.10'
   duration: 0.01
   communication_step: 0.01
   initial_inputs: {}
