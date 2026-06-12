@@ -1,4 +1,6 @@
 schema_version: '2.0'
+package: boltz-malaria-binding-workflow
+version: 1.0.0
 title: 'Boltz Workflow: Malaria Binding'
 description: Guided Boltz-2 workflow for exploring a malaria-related falcipain-2 target
   with an E-64 reference inhibitor-like ligand example, binder probability, affinity-like

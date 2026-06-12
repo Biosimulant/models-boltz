@@ -1,4 +1,6 @@
 schema_version: '2.0'
+package: boltz-antiviral-protease-workflow
+version: 1.0.0
 title: 'Boltz Workflow: Antiviral Protease'
 description: Guided Boltz-2 workflow for exploring a viral 3C-like protease target
   with a nirmatrelvir reference ligand example, binder probability, affinity-like

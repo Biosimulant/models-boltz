@@ -1,0 +1,46 @@
+schema_version: "1"
+namespace: demi
+default_visibility: public
+packages:
+  - id: boltz-antiviral-protease-workflow-lab
+    package: boltz-antiviral-protease-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-antiviral-protease-workflow
+    visibility: public
+  - id: boltz-batch-ligand-ranking-workflow-lab
+    package: boltz-batch-ligand-ranking-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-batch-ligand-ranking-workflow
+    visibility: public
+  - id: boltz-boltz2-affinity-predictor-lab
+    package: boltz-boltz2-affinity-predictor
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-boltz2-affinity-predictor
+    visibility: public
+  - id: boltz-cancer-kinase-workflow-lab
+    package: boltz-cancer-kinase-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-cancer-kinase-workflow
+    visibility: public
+  - id: boltz-malaria-binding-workflow-lab
+    package: boltz-malaria-binding-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-malaria-binding-workflow
+    visibility: public
+  - id: boltz-protein-ligand-101-workflow-lab
+    package: boltz-protein-ligand-101-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-protein-ligand-101-workflow
+    visibility: public
+  - id: boltz-tuberculosis-target-workflow-lab
+    package: boltz-tuberculosis-target-workflow
+    version: 1.0.0
+    type: lab
+    path: labs/boltz-tuberculosis-target-workflow
+    visibility: public

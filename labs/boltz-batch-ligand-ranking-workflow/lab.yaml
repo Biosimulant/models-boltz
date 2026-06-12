@@ -1,4 +1,6 @@
 schema_version: '2.0'
+package: boltz-batch-ligand-ranking-workflow
+version: 1.0.0
 title: 'Boltz Workflow: Batch Ligand Ranking'
 description: Guided Boltz-2 workflow for ranking a small ligand CSV against one protein
   target using binder probability, affinity-like value, confidence metrics, flags,

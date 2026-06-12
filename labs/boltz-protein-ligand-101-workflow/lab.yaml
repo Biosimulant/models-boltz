@@ -1,4 +1,6 @@
 schema_version: '2.0'
+package: boltz-protein-ligand-101-workflow
+version: 1.0.0
 title: 'Boltz Workflow: Protein-Ligand 101'
 description: Guided Boltz-2 workflow for learning how a protein sequence and ligand
   SMILES become a predicted complex, binder probability, affinity-like value, confidence

@@ -1,4 +1,6 @@
 schema_version: '2.0'
+package: boltz-cancer-kinase-workflow
+version: 1.0.0
 title: 'Boltz Workflow: Cancer Kinase'
 description: Guided Boltz-2 workflow for exploring a cancer-relevant ABL1 kinase domain
   with an imatinib reference ligand example, binder probability, affinity-like value,

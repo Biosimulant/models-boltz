@@ -121,6 +121,8 @@ runtime:
   initial_inputs: {}
   settle_steps: 1
 schema_version: '2.0'
+package: boltz-boltz2-affinity-predictor
+version: 1.0.0
 tags:
 - docking
 - boltz
