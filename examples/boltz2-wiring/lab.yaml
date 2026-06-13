@@ -14,7 +14,7 @@ models:
     sampling_steps: 200
     use_msa_server: true
   path: ../../labs/boltz-boltz2-affinity-predictor/models/core
-package: Biosimulant/models-boltz/examples/boltz2-wiring
+package: boltz2-wiring-example
 runtime:
   python_version: '3.10'
   duration: 0.01
@@ -33,5 +33,5 @@ scientific_context:
   question: Can Boltz-2 predict a protein-ligand complex remotely and return a renderable
     3D structure inside the desktop app?
 title: Boltz-2 Remote Example
-version: 7651a2829b60b601aef619a028a589b63d414c92-source-tree-1
+version: 1.0.0
 wiring: []
