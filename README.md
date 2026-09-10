@@ -12,6 +12,16 @@ upstream Boltz runtimes. It is intended for multiple Boltz-family models over
 time; the first implemented model is a Boltz-2 affinity-focused predictor for
 protein-ligand runs.
 
+## Runtime compatibility
+
+The components shipped by the seven publish-ready Labs use
+`BioModule.execute()` with `ExecutionPolicy.ONCE_BEFORE_RUN`. BioWorld invokes
+each component once per run and drains the complete dependency chain in stable
+order before temporal windows begin. Lab manifests remain unchanged for current
+product compatibility; their short duration and settle fields no longer control
+component invocation count. Biosimulant runtimes predating invocation-policy
+support require the prior wrapper release.
+
 This repo is distinct from
 [`models-onnx`](https://github.com/Biosimulant/models-onnx):
 - `models-onnx` is for checked-in ONNX artifacts wrapped behind BioModules

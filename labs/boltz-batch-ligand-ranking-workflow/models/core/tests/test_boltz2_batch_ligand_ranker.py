@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from biosim.modules import ExecutionContext, ExecutionPolicy
+
 from src.boltz2_batch_ligand_ranker import Boltz2BatchLigandRanker
 
 
@@ -33,8 +35,8 @@ def test_rank_rows_uses_binder_probability_then_affinity_value(tmp_path):
 def test_missing_csv_surfaces_error_payload(tmp_path):
     module = Boltz2BatchLigandRanker(default_protein_sequence="MKT", work_dir=str(tmp_path))
 
-    module.advance_window(0.0, 0.1)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.1))
 
-    metadata = module._cached_payloads["run_metadata"]
+    metadata = module._output_payloads["run_metadata"]
     assert metadata["status"] == "error"
     assert "ligand_csv" in metadata["error"]

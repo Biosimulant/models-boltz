@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from biosim import BioModule
+from biosim import BioModule, ExecutionContext, ExecutionPolicy
 from biosim.signals import (AcceptedSignalProfile, ArraySignal, BioSignal, EventSignal, RecordSignal, ScalarSignal, SignalSpec)
 from biosim.signals import unwrap_payload as _signal_value
 from biosim.signals import make_signal as _make_signal
@@ -77,6 +77,8 @@ def _generic_input_spec(description=None):
 
 class Boltz2AffinityPredictor(BioModule):
     """Run `boltz predict` once and surface compact structured outputs."""
+
+    execution_policy = ExecutionPolicy.ONCE_BEFORE_RUN
 
     def __init__(
         self,
@@ -139,8 +141,7 @@ class Boltz2AffinityPredictor(BioModule):
         self._msa_path: Optional[str] = str(Path(default_msa_path).expanduser().resolve()) if isinstance(default_msa_path, str) and default_msa_path.strip() else None
         self._run_options: Dict[str, Any] = _coerce_run_options(default_run_options)
         self._outputs: Dict[str, BioSignal] = {}
-        self._cached_payloads: Dict[str, Any] = {}
-        self._last_signature: Optional[str] = None
+        self._output_payloads: Dict[str, Any] = {}
 
     def inputs(self) -> dict[str, SignalSpec]:
         return {
@@ -159,83 +160,56 @@ class Boltz2AffinityPredictor(BioModule):
         }
 
     def reset(self) -> None:
+        super().reset()
         self._outputs = {}
-        self._cached_payloads = {}
-        self._last_signature = None
+        self._output_payloads = {}
 
     def set_inputs(self, signals: Dict[str, BioSignal]) -> None:
-        changed = False
-
         protein_signal = signals.get("protein_sequence")
         if protein_signal is not None:
             protein_sequence = _coerce_string(_signal_value(protein_signal), "sequence")
-            if protein_sequence != self._protein_sequence:
-                self._protein_sequence = protein_sequence
-                changed = True
+            self._protein_sequence = protein_sequence
 
         ligand_signal = signals.get("ligand_smiles")
         if ligand_signal is not None:
             ligand_smiles = _coerce_string(_signal_value(ligand_signal), "smiles")
-            if ligand_smiles != self._ligand_smiles:
-                self._ligand_smiles = ligand_smiles
-                changed = True
+            self._ligand_smiles = ligand_smiles
 
         msa_signal = signals.get("msa_path")
         if msa_signal is not None:
             msa_path = _coerce_string(_signal_value(msa_signal), "path")
-            if msa_path != self._msa_path:
-                self._msa_path = msa_path
-                changed = True
+            self._msa_path = msa_path
 
         run_signal = signals.get("run_options")
         if run_signal is not None:
             run_options = _coerce_run_options(_signal_value(run_signal))
-            if run_options != self._run_options:
-                self._run_options = run_options
-                changed = True
+            self._run_options = run_options
 
-        if changed:
-            self._last_signature = None
+    def execute(self, inputs: Mapping[str, BioSignal], *, context: ExecutionContext) -> Mapping[str, BioSignal]:
+        self.set_inputs(dict(inputs))
+        result = self._execute_at_time(0.0, 0.0)
+        return dict(result if result is not None else getattr(self, "_outputs", {}))
 
-    def advance_window(self, start: float, end: float) -> None:
+    def _execute_at_time(self, start: float, end: float) -> None:
         t = float(end)
         self._emit_progress("inputs", "Validating Boltz-2 inputs")
         resolved = self._resolved_options()
-        signature = json.dumps(
-            {
-                "protein_sequence": self._protein_sequence,
-                "ligand_smiles": self._ligand_smiles,
-                "msa_path": self._msa_path,
-                "run_options": resolved,
-            },
-            sort_keys=True,
-            default=str,
-        )
-
-        if signature == self._last_signature and self._cached_payloads:
-            self._emit_progress("cache", "Reusing cached Boltz-2 outputs for unchanged inputs")
-            self._emit_outputs(t)
-            return
-
         if not self._protein_sequence:
             error = "protein_sequence input is required"
             self._emit_progress("error", error)
             self._set_error_payload(error)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
         if not self._ligand_smiles:
             error = "ligand_smiles input is required"
             self._emit_progress("error", error)
             self._set_error_payload(error)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
         if not resolved["use_msa_server"] and not self._msa_path:
             error = "msa_path is required unless use_msa_server is enabled"
             self._emit_progress("error", error)
             self._set_error_payload(error)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -273,7 +247,6 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["error"] = f"failed to prepare Boltz runtime: {exc}"
             self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -287,7 +260,6 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["error"] = f"failed to execute boltz: {exc}"
             self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -296,7 +268,6 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["error"] = "boltz predict returned a non-zero exit code"
             self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -311,7 +282,6 @@ class Boltz2AffinityPredictor(BioModule):
             metadata["error"] = f"expected Boltz outputs were not found: {exc}"
             self._emit_progress("error", metadata["error"])
             self._set_error_payload(metadata["error"], metadata=metadata)
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -337,18 +307,14 @@ class Boltz2AffinityPredictor(BioModule):
 
         metadata["status"] = "completed"
         metadata["prediction_dir_name"] = prediction_dir.name
-        self._cached_payloads = {
+        self._output_payloads = {
             "affinity_summary": affinity_summary,
             "confidence_summary": confidence_summary,
             "structure_artifacts": artifacts,
             "run_metadata": metadata,
         }
-        self._last_signature = signature
         self._emit_progress("completed", "Boltz-2 outputs are ready")
         self._emit_outputs(t)
-
-    def get_outputs(self) -> Dict[str, BioSignal]:
-        return dict(self._outputs)
 
     def visualize(self) -> Optional[list[dict[str, Any]]]:
         return None
@@ -902,7 +868,7 @@ class Boltz2AffinityPredictor(BioModule):
         }
         payload["status"] = "error"
         payload["error"] = error
-        self._cached_payloads = {
+        self._output_payloads = {
             "affinity_summary": {},
             "confidence_summary": {},
             "structure_artifacts": {},
@@ -919,8 +885,8 @@ class Boltz2AffinityPredictor(BioModule):
     def _emit_outputs(self, t: float) -> None:
         source = getattr(self, "_world_name", self.__class__.__name__)
         self._outputs = {
-            "affinity_summary": _make_signal(source=source, name="affinity_summary", value=self._cached_payloads.get("affinity_summary", {}), emitted_at=t, spec=self.outputs().get("affinity_summary") if 'self' in locals() else None),
-            "confidence_summary": _make_signal(source=source, name="confidence_summary", value=self._cached_payloads.get("confidence_summary", {}), emitted_at=t, spec=self.outputs().get("confidence_summary") if 'self' in locals() else None),
-            "structure_artifacts": _make_signal(source=source, name="structure_artifacts", value=self._cached_payloads.get("structure_artifacts", {}), emitted_at=t, spec=self.outputs().get("structure_artifacts") if 'self' in locals() else None),
-            "run_metadata": _make_signal(source=source, name="run_metadata", value=self._cached_payloads.get("run_metadata", {}), emitted_at=t, spec=self.outputs().get("run_metadata") if 'self' in locals() else None),
+            "affinity_summary": _make_signal(source=source, name="affinity_summary", value=self._output_payloads.get("affinity_summary", {}), emitted_at=t, spec=self.outputs().get("affinity_summary") if 'self' in locals() else None),
+            "confidence_summary": _make_signal(source=source, name="confidence_summary", value=self._output_payloads.get("confidence_summary", {}), emitted_at=t, spec=self.outputs().get("confidence_summary") if 'self' in locals() else None),
+            "structure_artifacts": _make_signal(source=source, name="structure_artifacts", value=self._output_payloads.get("structure_artifacts", {}), emitted_at=t, spec=self.outputs().get("structure_artifacts") if 'self' in locals() else None),
+            "run_metadata": _make_signal(source=source, name="run_metadata", value=self._output_payloads.get("run_metadata", {}), emitted_at=t, spec=self.outputs().get("run_metadata") if 'self' in locals() else None),
         }

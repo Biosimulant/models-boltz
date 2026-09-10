@@ -10,6 +10,7 @@ import time
 
 import pytest
 from biosim.signals import (AcceptedSignalProfile, ArraySignal, BioSignal, EventSignal, RecordSignal, ScalarSignal, SignalSpec)
+from biosim.modules import ExecutionContext, ExecutionPolicy
 import yaml
 from biosim.signals import unwrap_payload as _signal_value
 from biosim.signals import make_signal as _make_signal
@@ -87,9 +88,8 @@ def test_missing_inputs_surface_error_metadata(biosim, tmp_path):
     module.set_inputs({
         "ligand_smiles": _make_signal(source="test", name="ligand_smiles", value="CCO", emitted_at=0.0, spec=None),
     })
-    module.advance_window(0.0, 0.1)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.1))
 
-    outputs = module.get_outputs()
     assert _signal_value(outputs["run_metadata"])["status"] == "error"
     assert "protein_sequence" in _signal_value(outputs["run_metadata"])["error"]
     assert module.visualize() is None
@@ -140,9 +140,8 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     runtime_dir = tmp_path / "managed-runtime"
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(runtime_dir), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    outputs = module.get_outputs()
     metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["runtime_bootstrapped"] is True
@@ -175,7 +174,7 @@ def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim
     plddt_file = prediction_dir / "plddt_request_model_0.npz"
     plddt_file.write_text("placeholder", encoding="utf-8")
 
-    module._cached_payloads = {
+    module._output_payloads = {
         "run_metadata": {"status": "completed"},
         "structure_artifacts": {
             "prediction_dir": str(prediction_dir),
@@ -189,8 +188,8 @@ def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim
     }
 
     assert module.visualize() is None
-    assert module._cached_payloads["structure_artifacts"]["prediction_dir"] == str(prediction_dir)
-    assert "/../" in module._cached_payloads["structure_artifacts"]["prediction_dir"]
+    assert module._output_payloads["structure_artifacts"]["prediction_dir"] == str(prediction_dir)
+    assert "/../" in module._output_payloads["structure_artifacts"]["prediction_dir"]
 
 
 def test_advance_emits_progress_events_for_long_steps(biosim, tmp_path, monkeypatch, capsys):
@@ -239,7 +238,7 @@ def test_advance_emits_progress_events_for_long_steps(biosim, tmp_path, monkeypa
     )
     _set_required_inputs(module, BioSignal)
 
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
     captured = capsys.readouterr().out.splitlines()
     progress_events = [
         json.loads(line.removeprefix("BSIM_PROGRESS:"))
@@ -276,9 +275,9 @@ def test_runtime_bootstrap_failure_surfaces_metadata(biosim, tmp_path, monkeypat
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    metadata = _signal_value(module.get_outputs()["run_metadata"])
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "error"
     assert "prepare Boltz runtime" in metadata["error"]
 
@@ -308,9 +307,9 @@ def test_subprocess_failure_surfaces_metadata(biosim, tmp_path, monkeypatch):
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    metadata = _signal_value(module.get_outputs()["run_metadata"])
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "error"
     assert metadata["returncode"] == 3
     assert "non-zero" in metadata["error"]
@@ -364,9 +363,9 @@ def test_corrupted_cache_is_purged_and_retried_once(biosim, tmp_path, monkeypatc
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    metadata = _signal_value(module.get_outputs()["run_metadata"])
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["cache_repaired"] is True
     assert metadata["retry_count"] == 1
@@ -402,9 +401,9 @@ def test_missing_expected_files_becomes_error(biosim, tmp_path, monkeypatch):
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    metadata = _signal_value(module.get_outputs()["run_metadata"])
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "error"
     assert "expected Boltz outputs" in metadata["error"]
 
@@ -448,9 +447,8 @@ def test_legacy_success_layout_without_affinity_json_is_accepted(biosim, tmp_pat
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    outputs = module.get_outputs()
     metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert _signal_value(outputs["affinity_summary"]) == {}
@@ -499,15 +497,14 @@ def test_recursive_output_layout_is_accepted(biosim, tmp_path, monkeypatch):
         use_msa_server=True,
     )
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.5)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.5))
 
-    outputs = module.get_outputs()
     assert _signal_value(outputs["run_metadata"])["status"] == "completed"
     assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.92
     assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).name == "affinity_model_0.cif"
 
 
-def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch):
+def test_bioworld_invokes_predictor_once_per_run(biosim, tmp_path, monkeypatch):
     from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
     from biosim.signals import BioSignal
 
@@ -548,13 +545,12 @@ def test_repeat_advance_does_not_rerun_until_reset(biosim, tmp_path, monkeypatch
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.2)
-    module.advance_window(0.0, 0.3)
+    world = biosim.BioWorld(communication_step=0.1)
+    world.add_biomodule("predictor", module)
+    world.run(duration=0.3)
     assert calls["predict"] == 1
 
-    module.reset()
-    _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.4)
+    world.run(duration=0.1)
     assert calls["predict"] == 2
 
 
@@ -594,8 +590,7 @@ def test_constructor_defaults_allow_space_style_usage(biosim, tmp_path, monkeypa
         default_protein_sequence="MKTAYIAKQRQISFVKSHFSRQ",
         default_ligand_smiles="CCO",
     )
-    module.advance_window(0.0, 0.1)
-    outputs = module.get_outputs()
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.1))
     assert _signal_value(outputs["run_metadata"])["status"] == "completed"
     assert _signal_value(outputs["affinity_summary"])["affinity_probability_binary"] == 0.66
 
@@ -647,9 +642,9 @@ def test_managed_runtime_selects_supported_python_when_host_python_is_unsupporte
 
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path), runtime_dir=str(tmp_path / "managed-runtime"), use_msa_server=True)
     _set_required_inputs(module, BioSignal)
-    module.advance_window(0.0, 0.1)
+    outputs = module.execute({}, context=ExecutionContext(policy=ExecutionPolicy.ONCE_BEFORE_RUN, run_start=0.0, run_end=0.1))
 
-    metadata = _signal_value(module.get_outputs()["run_metadata"])
+    metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert metadata["runtime_base_python"].endswith("python3.12")
 
@@ -732,5 +727,4 @@ def _generic_input_spec(description=None):
         ),
         description=description,
     )
-
 

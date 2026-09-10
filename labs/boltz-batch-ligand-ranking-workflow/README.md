@@ -4,6 +4,14 @@ Batch Ligand Ranking is a guided BioSimulant Boltz workflow for comparing a smal
 
 This is the first workflow here that is more than a repackaged single Boltz run. It adds CSV intake, repeated execution, result aggregation, ranking, flags, and a batch-specific visualisation table. It is still designed for learning, small-set comparison, and early biological hypothesis generation, not validated drug discovery or final compound selection.
 
+## Execution behavior
+
+Every graph component implements `BioModule.execute()` with
+`ExecutionPolicy.ONCE_BEFORE_RUN`. BioWorld invokes each component once per
+run and drains the dependency graph in stable layers; no artificial settle turn
+is required to move data between these components. Existing temporal manifest
+fields remain unchanged for compatibility with current Biosimulant products.
+
 ## Workflow Status
 
 This lab validates locally, exports as a portable `.bsilab` package, and has a successful private pre-publication GPU-backed run. It is published on Biosimulant Hub and now uses a multi-stage Compose graph. The graph separates source-backed context, input assembly, Boltz-2 prediction, conservative interpretation, and visual reporting.

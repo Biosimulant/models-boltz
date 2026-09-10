@@ -4,6 +4,14 @@ Protein-Ligand 101 is the first curated BioSimulant Boltz workflow. It runs a si
 
 The workflow is designed for learning and early biological hypothesis generation. It is not experimental validation, a clinical prediction, or a replacement for docking review, MD/FEP, assay design, or wet-lab confirmation.
 
+## Execution behavior
+
+Every graph component implements `BioModule.execute()` with
+`ExecutionPolicy.ONCE_BEFORE_RUN`. BioWorld invokes each component once per
+run and drains the dependency graph in stable layers; no artificial settle turn
+is required to move data between these components. Existing temporal manifest
+fields remain unchanged for compatibility with current Biosimulant products.
+
 ## Workflow Status
 
 This lab validates locally, exports as a portable `.bsilab` package, and has a successful pre-publication GPU-backed run. It is published on Biosimulant Hub and now uses a multi-stage Compose graph. The graph separates source-backed context, input assembly, Boltz-2 prediction, conservative interpretation, and visual reporting.

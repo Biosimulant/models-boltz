@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from biosim import BioModule
+from biosim import BioModule, ExecutionContext, ExecutionPolicy
 from biosim.signals import AcceptedSignalProfile, BioSignal, SignalSpec, make_signal
 from biosim.signals import unwrap_payload as _signal_value
 
@@ -32,6 +32,8 @@ def _coerce_mapping(signal: BioSignal | None) -> dict[str, Any]:
 
 class BoltzPredictionInterpreterModel(BioModule):
     """Convert raw Boltz records into conservative workflow evidence."""
+
+    execution_policy = ExecutionPolicy.ONCE_BEFORE_RUN
 
     def __init__(
         self,
@@ -73,13 +75,19 @@ class BoltzPredictionInterpreterModel(BioModule):
         }
 
     def reset(self) -> None:
+        super().reset()
         self._inputs = {}
         self._outputs = {}
 
     def set_inputs(self, signals: dict[str, BioSignal]) -> None:
         self._inputs.update(signals or {})
 
-    def advance_window(
+    def execute(self, inputs: Mapping[str, BioSignal], *, context: ExecutionContext) -> Mapping[str, BioSignal]:
+        self.set_inputs(dict(inputs))
+        result = self._execute_at_time(0.0, 0.0)
+        return dict(result if result is not None else getattr(self, "_outputs", {}))
+
+    def _execute_at_time(
         self,
         start: float | None = None,
         end: float | None = None,
@@ -131,9 +139,6 @@ class BoltzPredictionInterpreterModel(BioModule):
                 spec=self.outputs()["prediction_evidence"],
             )
         }
-        return dict(self._outputs)
-
-    def get_outputs(self) -> dict[str, BioSignal]:
         return dict(self._outputs)
 
     def visualize(self) -> list[dict[str, Any]] | None:

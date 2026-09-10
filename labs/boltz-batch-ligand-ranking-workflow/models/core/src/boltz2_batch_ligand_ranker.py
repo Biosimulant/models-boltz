@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from biosim import BioModule
+from biosim import BioModule, ExecutionContext, ExecutionPolicy
 from biosim.signals import AcceptedSignalProfile, BioSignal, SignalSpec
 from biosim.signals import make_signal as _make_signal
 from biosim.signals import unwrap_payload as _signal_value
@@ -49,6 +49,8 @@ def _coerce_run_options(value: Any) -> Dict[str, Any]:
 
 class Boltz2BatchLigandRanker(BioModule):
     """Run a small ligand CSV against one protein and rank Boltz-2 outputs."""
+
+    execution_policy = ExecutionPolicy.ONCE_BEFORE_RUN
 
     def __init__(
         self,
@@ -108,8 +110,7 @@ class Boltz2BatchLigandRanker(BioModule):
         }
         self.work_dir = Path(work_dir).resolve() if work_dir else None
         self._outputs: Dict[str, BioSignal] = {}
-        self._cached_payloads: Dict[str, Any] = {}
-        self._last_signature: Optional[str] = None
+        self._output_payloads: Dict[str, Any] = {}
 
     def inputs(self) -> dict[str, SignalSpec]:
         return {
@@ -129,67 +130,44 @@ class Boltz2BatchLigandRanker(BioModule):
         }
 
     def reset(self) -> None:
+        super().reset()
         self._outputs = {}
-        self._cached_payloads = {}
-        self._last_signature = None
+        self._output_payloads = {}
 
     def set_inputs(self, signals: Dict[str, BioSignal]) -> None:
-        changed = False
         protein_signal = signals.get("protein_sequence")
         if protein_signal is not None:
             protein_sequence = _coerce_string(_signal_value(protein_signal), "sequence")
-            if protein_sequence != self._protein_sequence:
-                self._protein_sequence = protein_sequence
-                changed = True
+            self._protein_sequence = protein_sequence
 
         csv_signal = signals.get("ligand_csv")
         if csv_signal is not None:
             ligand_csv = _coerce_string(_signal_value(csv_signal), "csv")
-            if ligand_csv != self._ligand_csv:
-                self._ligand_csv = ligand_csv
-                changed = True
+            self._ligand_csv = ligand_csv
 
         msa_signal = signals.get("msa_path")
         if msa_signal is not None:
             msa_path = _coerce_string(_signal_value(msa_signal), "path")
-            if msa_path != self._msa_path:
-                self._msa_path = msa_path
-                changed = True
+            self._msa_path = msa_path
 
         run_signal = signals.get("run_options")
         if run_signal is not None:
             run_options = _coerce_run_options(_signal_value(run_signal))
-            if run_options != self._run_options:
-                self._run_options = run_options
-                changed = True
+            self._run_options = run_options
 
-        if changed:
-            self._last_signature = None
+    def execute(self, inputs: Mapping[str, BioSignal], *, context: ExecutionContext) -> Mapping[str, BioSignal]:
+        self.set_inputs(dict(inputs))
+        result = self._execute_at_time(0.0, 0.0)
+        return dict(result if result is not None else getattr(self, "_outputs", {}))
 
-    def advance_window(self, start: float, end: float) -> None:
+    def _execute_at_time(self, start: float, end: float) -> None:
         t = float(end)
-        signature = json.dumps(
-            {
-                "protein_sequence": self._protein_sequence,
-                "ligand_csv": self._ligand_csv,
-                "msa_path": self._msa_path,
-                "run_options": self._run_options,
-            },
-            sort_keys=True,
-            default=str,
-        )
-        if signature == self._last_signature and self._cached_payloads:
-            self._emit_outputs(t)
-            return
-
         if not self._protein_sequence:
             self._set_error_payload("protein_sequence input is required")
-            self._last_signature = signature
             self._emit_outputs(t)
             return
         if not self._ligand_csv:
             self._set_error_payload("ligand_csv input is required")
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -197,13 +175,11 @@ class Boltz2BatchLigandRanker(BioModule):
             ligands = self._parse_ligand_csv(self._ligand_csv)
         except Exception as exc:  # noqa: BLE001
             self._set_error_payload(f"failed to parse ligand_csv: {exc}")
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
         if not ligands:
             self._set_error_payload("ligand_csv must contain at least one ligand row")
-            self._last_signature = signature
             self._emit_outputs(t)
             return
         if len(ligands) > self.max_ligands:
@@ -233,8 +209,14 @@ class Boltz2BatchLigandRanker(BioModule):
                 work_dir=str(ligand_run_dir),
                 **self.runner_kwargs,
             )
-            runner.advance_window(float(index - 1), float(index))
-            outputs = runner.get_outputs()
+            outputs = runner.execute(
+                {},
+                context=ExecutionContext(
+                    policy=ExecutionPolicy.ONCE_BEFORE_RUN,
+                    run_start=0.0,
+                    run_end=1.0,
+                ),
+            )
             affinity = self._payload(outputs.get("affinity_summary"))
             confidence = self._payload(outputs.get("confidence_summary"))
             artifacts = self._payload(outputs.get("structure_artifacts"))
@@ -269,7 +251,6 @@ class Boltz2BatchLigandRanker(BioModule):
                 "all ligand runs failed",
                 metadata={"status": "error", "ligand_runs": per_ligand_metadata},
             )
-            self._last_signature = signature
             self._emit_outputs(t)
             return
 
@@ -305,18 +286,14 @@ class Boltz2BatchLigandRanker(BioModule):
             "ranked_ligands": ranked_rows,
             "interpretation": "Use as an early comparison table only; follow-up review and validation are required.",
         }
-        self._cached_payloads = {
+        self._output_payloads = {
             "batch_summary": batch_summary,
             "affinity_summary": top_affinity,
             "confidence_summary": top_confidence,
             "structure_artifacts": top_artifacts,
             "run_metadata": top_metadata,
         }
-        self._last_signature = signature
         self._emit_outputs(t)
-
-    def get_outputs(self) -> Dict[str, BioSignal]:
-        return dict(self._outputs)
 
     def visualize(self) -> None:
         return None
@@ -412,7 +389,7 @@ class Boltz2BatchLigandRanker(BioModule):
     def _set_error_payload(self, error: str, metadata: Optional[dict[str, Any]] = None) -> None:
         run_metadata = metadata or {}
         run_metadata.update({"status": "error", "error": error})
-        self._cached_payloads = {
+        self._output_payloads = {
             "batch_summary": {"status": "error", "error": error, "ranked_ligands": []},
             "affinity_summary": {},
             "confidence_summary": {},
@@ -424,6 +401,6 @@ class Boltz2BatchLigandRanker(BioModule):
         source = getattr(self, "_world_name", self.__class__.__name__)
         specs = self.outputs()
         self._outputs = {
-            name: _make_signal(source=source, name=name, value=self._cached_payloads.get(name, {}), emitted_at=t, spec=specs.get(name))
+            name: _make_signal(source=source, name=name, value=self._output_payloads.get(name, {}), emitted_at=t, spec=specs.get(name))
             for name in specs
         }
