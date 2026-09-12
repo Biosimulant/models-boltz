@@ -1,6 +1,6 @@
 # Boltz Workflow: Protein-Ligand 101
 
-Protein-Ligand 101 is the first curated BioSimulant Boltz workflow. It runs a single protein sequence and a single ligand SMILES through Boltz-2, then presents the predicted complex, affinity-style outputs, confidence metrics, run metadata, and report-ready caveats in the standard Biosimulant lab interface.
+Protein-Ligand 101 is the first curated Biosimulant Boltz workflow. It runs a single protein sequence and a single ligand SMILES through Boltz-2, then presents the predicted complex, affinity-style outputs, confidence metrics, run metadata, and report-ready caveats in the standard Biosimulant lab interface.
 
 The workflow is designed for learning and early biological hypothesis generation. It is not experimental validation, a clinical prediction, or a replacement for docking review, MD/FEP, assay design, or wet-lab confirmation.
 
@@ -70,7 +70,7 @@ When run, the workflow:
 <!-- BIOSIMULANT_WORKFLOW_GRAPH_START -->
 ## Compose Workflow Graph
 
-The published workflow is intentionally split into real BioSimulant modules:
+The published workflow is intentionally split into real Biosimulant modules:
 
 1. `protein_ligand_tutorial_context` emits source-backed target, ligand, disease/use-case, provenance, and caveat context.
 2. `protein_ligand_setup` resolves the public protein, ligand, MSA, and run-option inputs into the exact Boltz request.

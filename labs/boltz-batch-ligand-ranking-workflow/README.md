@@ -1,6 +1,6 @@
 # Boltz Workflow: Batch Ligand Ranking
 
-Batch Ligand Ranking is a guided BioSimulant Boltz workflow for comparing a small ligand CSV against one protein target. It runs Boltz-2 once per ligand, extracts binder probability, affinity-like value, confidence metrics, and top-structure artifacts, then ranks the completed candidates into a report-ready table.
+Batch Ligand Ranking is a guided Biosimulant Boltz workflow for comparing a small ligand CSV against one protein target. It runs Boltz-2 once per ligand, extracts binder probability, affinity-like value, confidence metrics, and top-structure artifacts, then ranks the completed candidates into a report-ready table.
 
 This is the first workflow here that is more than a repackaged single Boltz run. It adds CSV intake, repeated execution, result aggregation, ranking, flags, and a batch-specific visualisation table. It is still designed for learning, small-set comparison, and early biological hypothesis generation, not validated drug discovery or final compound selection.
 
@@ -74,7 +74,7 @@ The example is a kinase-inhibitor teaching set. It does not predict patient resp
 <!-- BIOSIMULANT_WORKFLOW_GRAPH_START -->
 ## Compose Workflow Graph
 
-The published workflow is intentionally split into real BioSimulant modules:
+The published workflow is intentionally split into real Biosimulant modules:
 
 1. `batch_target_context` emits source-backed target, ligand, disease/use-case, provenance, and caveat context.
 2. `ligand_library_loader` resolves the public protein, ligand, MSA, and run-option inputs into the exact Boltz request.
