@@ -1,79 +1,96 @@
-# Boltz: Boltz2AffinityPredictor Lab
+# Boltz-2 affinity predictor
 
-This lab runs Boltz-2 to jointly predict the 3D structure of a protein-ligand complex and a binding-affinity summary from sequence-only inputs. The protein is provided as an amino-acid string and the ligand as a SMILES string. The lab ships with a real protein/ligand example baked into `lab.yaml` so a fresh run produces a renderable complex and an affinity readout without any extra setup.
+This GPU Lab wraps `boltz[cuda]==2.0.2` for one protein and one ligand. It
+predicts a protein-ligand complex, reports Boltz affinity outputs, and retains
+the existing confidence and artifact summaries used by the visualisation.
 
-The wrapper drives the upstream Boltz CLI pinned at `boltz[cuda]==2.0.2`, runs the diffusion and recycling pipeline on a GPU runner, and returns the parsed affinity and confidence summaries plus file-backed structure artifacts (mmCIF by default).
+Lab version `1.1.0` uses `biosimulant==0.0.29` and compatibility standard `0`.
+It is a new revision of the Hub `1.0.0` Lab; it does not alter that published
+release.
 
-This lab is for single-complex, sequence-only Boltz-2 affinity runs. It does not handle batch screening, custom MSAs without an MSA server, alternative Boltz model variants, or non-Boltz structural runtimes. Those belong in adjacent labs.
+## Default run
 
-## What You'll See
+The Lab includes a 384-residue protein, ligand SMILES
+`N[C@@H](Cc1ccc(O)cc1)C(=O)O`, and a matching A3M file at
+`models/core/assets/seq1.a3m`. The default run does not call an MSA server.
 
-The lab opens as a small canvas with one Boltz-2 node and a run-results panel. With the bundled defaults, the run produces:
-
-- a structure3d view of the predicted protein-ligand complex,
-- an affinity summary with binding probability and predicted affinity,
-- a confidence summary with pTM, ipTM, and pLDDT bands for the top-ranked prediction,
-- run metadata with the truncated Boltz stdout/stderr and the resolved output paths.
-
-The first screenshot shows the canvas and results panel with the interactive 3D complex structure and confidence annotations. The second scrolls down to the same run's confidence, affinity, and summary-table metrics.
-
-![Boltz2 affinity lab canvas with predicted protein-ligand complex structure](assets/boltz2-affinity-structure-results.png)
-
-![Boltz2 affinity confidence, affinity, and summary metrics](assets/boltz2-affinity-summary-metrics.png)
-
-## How to Read the Visualizations
-
-The structure3d view shows the predicted complex assembled from the top-ranked Boltz output. Use it to sanity-check that the ligand is positioned in a plausible binding pocket on the predicted fold. If the ligand sits outside the protein density, the prediction is unreliable for that pair regardless of what the affinity summary says.
-
-The affinity summary reports a binding probability (dimensionless, 0 to 1) and a predicted affinity expressed as pIC50. Higher pIC50 is a stronger predicted bind. Treat both as Boltz-2 model outputs, not experimental measurements: they are useful for ranking related candidates against the same target, less useful as absolute numbers.
-
-The confidence summary captures Boltz's internal confidence bands. pTM and ipTM track global and interface fold confidence (0 to 1, higher is better). pLDDT is per-residue confidence (0 to 100, higher is better). Low ipTM with reasonable pTM usually means the protein fold is fine but the ligand placement is uncertain.
-
-In the screenshot run, the top-ranked prediction reports high confidence metrics for the default protein-ligand pair: confidence score about 0.92, pTM about 0.93, ipTM about 0.91, and complex pLDDT about 0.92. The affinity table reports predicted affinity about 2.18 pIC50 with binder probability about 0.54.
-
-The run metadata records which Boltz version executed, the resolved output directory, the truncated stdout/stderr from the Boltz CLI, and `status: ok` or `status: error` so a failed run is still inspectable.
-
-## What This Lab Contains
-
-- `lab.yaml` describes the lab, exposes its inputs and outputs, and pins the bundled defaults.
-- `wiring-layout.json` places the model on the canvas.
-- `model/model.yaml` describes the model package, parameters, and ports.
-- `models/core/src/boltz2_affinity_predictor.py` contains the wrapper and managed-runtime install logic.
-- `models/visualisation/src/docking_visualisation.py` turns the structure, affinity, confidence, and run metadata records into Biosimulant visuals.
-- `model/tests/` checks the wrapper, manifest, and lab contract.
-
-The bundled defaults are encoded as strings inside `lab.yaml` (`default_protein_sequence`, `default_ligand_smiles`). There is no `model/data/` directory because Boltz-2 takes sequence-only inputs.
-
-## Inputs
-
-The model accepts four input signals. Each one falls back to the matching `default_*` parameter in `lab.yaml` when the signal is not wired, which is what makes the lab runnable out of the box.
-
-- `protein_sequence` (string): amino-acid sequence string. Defaults to the bundled example protein.
-- `ligand_smiles` (string): SMILES string for the ligand. Defaults to the bundled example tyrosine derivative.
-- `msa_path` (path, optional): path to a pre-computed MSA (.a3m). When unset and `use_msa_server: true`, Boltz queries the configured MSA server instead.
-- `run_options` (record, optional): Boltz options dict merged onto the defaults. Useful for overriding `recycling_steps`, `sampling_steps`, `diffusion_samples`, `output_format`, or `accelerator` on a per-run basis without changing `lab.yaml`.
-
-## Outputs
-
-- `affinity_summary` (record): binding probability and predicted affinity (pIC50) for the top-ranked prediction.
-- `confidence_summary` (record): pTM, ipTM, and pLDDT bands for the top-ranked prediction.
-- `structure_artifacts` (record): absolute paths to the Boltz output structure files (mmCIF or PDB depending on `output_format`).
-- `run_metadata` (record): runtime metadata, Boltz version, output directory, truncated stdout/stderr, and `status: ok` or `status: error`.
-
-## Running in Biosimulant Desktop
-
-Import the lab once with the Biosim CLI, then open it from the desktop app. The bundled defaults mean the first run requires no parameter editing.
-
-```bash
-biosimulant labs import labs/boltz-boltz2-affinity-predictor
+```text
+use_msa_server: false
+output_format: mmcif
+sampling_steps: 200
+recycling_steps: 3
+diffusion_samples: 1
+accelerator: gpu
+devices: 1
 ```
 
-To predict a different complex, override `protein_sequence` and `ligand_smiles` in the lab's run sidebar (or wire them to a source module that produces the strings). The model treats wired input signals as overrides on top of the defaults, so partial overrides work too.
+When an A3M is used, the wrapper reads its query sequence, removes alignment
+gaps, normalizes case, and checks that it equals `protein_sequence` before GPU
+compute starts. If you change the protein, supply a matching A3M or explicitly
+enable the MSA server.
 
-## Notes
+## Inputs and compatibility
 
-- Boltz-2 is GPU-bound. Remote runs use the GPU-enabled runtime image; local runs need a CUDA device or they will be unusably slow.
-- Managed runtime mode installs `boltz[cuda]==2.0.2` on first run. Plan for a multi-minute first-run install; subsequent runs are offline.
-- The bundled defaults rely on `use_msa_server: true` because no MSA file is shipped. To run fully offline, set `default_msa_path` to a local `.a3m` and toggle `use_msa_server` off.
-- Boltz and its downstream visualization use `BioModule.execute()` with `ExecutionPolicy.ONCE_BEFORE_RUN`, so each runs exactly once per BioWorld run and the dependency chain drains without settle turns.
-- The short `runtime.duration` and `runtime.settle_steps: 1` fields remain in the manifest for product compatibility; they do not determine the wrappers' invocation count.
+| Input | Profile | Notes |
+|---|---|---|
+| `protein_sequence` | `protein.sequence/v1` | One amino-acid sequence; defaults to the packaged example |
+| `ligand_smiles` | `chemical.smiles/v1` | One molecular SMILES string; defaults to the packaged example |
+| `msa_path` | `protein.multiple-sequence-alignment/v1` | Path to one A3M file; defaults to the packaged matching alignment |
+| `run_options` | Unstandardized | Operational overrides such as sampling settings |
+
+Lab `1.1.0` accepts mmCIF output only. A `pdb` runtime override is rejected
+before Boltz runs because the public `predicted_structure` contract is mmCIF.
+
+## Outputs and compatibility
+
+| Output | Profile | Meaning |
+|---|---|---|
+| `binding_probability` | `boltz.binding-probability/v1` | Atomic `affinity_probability_binary`, finite and from 0 through 1 |
+| `affinity_log10_ic50_micromolar` | `boltz.log10-ic50-micromolar/v1` | Atomic `affinity_pred_value` |
+| `predicted_structure` | `protein-ligand.complex-structure-mmcif/v1` | Absolute path to the top-ranked mmCIF complex |
+| `affinity_summary` | Unstandardized | Original multi-field Boltz affinity record |
+| `confidence_summary` | Unstandardized | Original Boltz confidence record |
+| `structure_artifacts` | Unstandardized | Operational collection of artifact paths |
+| `run_metadata` | Unstandardized | Status, command, logs, cache details, versions, and compatibility provenance |
+
+Boltz defines `affinity_pred_value` as `log10(IC50)` where IC50 is expressed in
+micromolar. Lower values imply stronger predicted affinity. It is not pIC50,
+not an experimentally measured IC50, and not safely comparable with another
+concentration basis or logarithmic convention without an explicit adapter.
+
+Missing optional affinity fields are recorded as warnings and are not converted
+to zero. A failed run emits `run_metadata.status: error` and does not emit fake
+atomic values or an empty structure path. A missing required structure makes
+the run fail.
+
+## Scientific limits
+
+All affinity, probability, confidence, and structure values are model
+predictions. Compatibility checks establish representation and interface
+meaning; they do not establish molecular identity, MSA quality, binding,
+structural accuracy, experimental validity, or clinical usefulness.
+
+## Validate locally
+
+From the repository root:
+
+```bash
+biosimulant compatibility validate \
+  labs/boltz-boltz2-affinity-predictor/models/core/model.yaml
+
+biosimulant labs release validate biosimulant-packages.yaml
+biosimulant labs release build biosimulant-packages.yaml \
+  --out dist/biosimulant-packages
+```
+
+The full scientific run requires one CUDA GPU and can take long enough that the
+managed-run timeout is set to 3600 seconds. Local unit tests mock the Boltz CLI;
+the final acceptance run uses managed GPU compute and verifies the returned
+atomic outputs, mmCIF artifact, logs, and Experiment Passport.
+
+The two existing screenshots show the original visualisation, which continues
+to consume the four aggregate records:
+
+![Predicted protein-ligand complex](assets/boltz2-affinity-structure-results.png)
+
+![Affinity and confidence summaries](assets/boltz2-affinity-summary-metrics.png)

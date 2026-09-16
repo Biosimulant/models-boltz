@@ -34,13 +34,13 @@ io:
       control: file
     name: msa_path
     label: Precomputed MSA Path
-    description: Optional path to a precomputed MSA file; leave unset when the MSA server is used.
+    description: Optional A3M override. Its query sequence must match the protein input; the packaged matching A3M is used by default.
   - maps_to: boltz_boltz2_affinity_predictor.run_options.use_msa_server
     name: use_msa_server
     label: Use MSA Server
-    description: Use Boltz's MSA server instead of requiring a precomputed MSA file.
+    description: Use Boltz's MSA server instead of the packaged deterministic A3M file.
     value_type: boolean
-    default: true
+    default: false
   - maps_to: boltz_boltz2_affinity_predictor.run_options.sampling_steps
     name: sampling_steps
     label: Sampling Steps
@@ -67,7 +67,6 @@ io:
     default: mmcif
     allowed_values:
     - mmcif
-    - pdb
   - maps_to: boltz_boltz2_affinity_predictor.run_options
     value_type: record
     format: json
@@ -80,6 +79,18 @@ io:
     label: Boltz Run Options
     description: Optional structured Boltz workflow controls such as MSA-server use, output format, and sampling settings.
   outputs:
+  - maps_to: boltz_boltz2_affinity_predictor.binding_probability
+    name: binding_probability
+    label: Binding Probability
+    description: Boltz affinity_probability_binary as a dimensionless value from 0 through 1.
+  - maps_to: boltz_boltz2_affinity_predictor.affinity_log10_ic50_micromolar
+    name: affinity_log10_ic50_micromolar
+    label: Predicted log10(IC50 in micromolar)
+    description: Boltz affinity_pred_value. Lower values imply stronger predicted affinity; this is not pIC50.
+  - maps_to: boltz_boltz2_affinity_predictor.predicted_structure
+    name: predicted_structure
+    label: Predicted Complex mmCIF
+    description: Top-ranked predicted protein-ligand complex as an mmCIF file.
   - maps_to: boltz_boltz2_affinity_predictor.affinity_summary
     name: affinity_summary
     label: Affinity-Style Summary
@@ -101,6 +112,7 @@ models:
   parameters:
     accelerator: gpu
     default_ligand_smiles: N[C@@H](Cc1ccc(O)cc1)C(=O)O
+    default_msa_path: assets/seq1.a3m
     default_protein_sequence: MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ
     diffusion_samples: 1
     output_format: mmcif
@@ -108,7 +120,7 @@ models:
     recycling_steps: 3
     runtime_mode: managed
     sampling_steps: 200
-    use_msa_server: true
+    use_msa_server: false
   path: models/core
 - alias: visualisation
   parameters:
@@ -122,7 +134,7 @@ runtime:
   settle_steps: 1
 schema_version: '2.0'
 package: boltz-boltz2-affinity-predictor
-version: 1.0.0
+version: 1.1.0
 tags:
 - docking
 - boltz

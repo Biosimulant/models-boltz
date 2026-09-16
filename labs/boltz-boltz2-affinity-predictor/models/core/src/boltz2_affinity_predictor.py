@@ -13,6 +13,7 @@ import sys
 import tempfile
 import tarfile
 import hashlib
+import math
 import threading
 import time
 from collections.abc import Mapping
@@ -21,10 +22,18 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from biosim import BioModule, ExecutionContext, ExecutionPolicy
-from biosim.signals import (AcceptedSignalProfile, ArraySignal, BioSignal, EventSignal, RecordSignal, ScalarSignal, SignalSpec)
-from biosim.signals import unwrap_payload as _signal_value
-from biosim.signals import make_signal as _make_signal
+from biosimulant import (
+    BioModule,
+    BioSignal,
+    ExecutionContext,
+    ExecutionPolicy,
+    SignalSpec,
+    __version__ as _biosimulant_version,
+    check_payload,
+    compatibility_provenance,
+    make_signal as _make_signal,
+    unwrap_payload as _signal_value,
+)
 
 _SUPPORTED_PYTHON_MINORS = (10, 11, 12)
 
@@ -49,30 +58,6 @@ def _coerce_run_options(value: Any) -> Dict[str, Any]:
         if isinstance(key, str):
             out[key] = item
     return out
-
-
-def _schema_type(value):
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int) and not isinstance(value, bool):
-        return "int"
-    if isinstance(value, float):
-        return "float"
-    if isinstance(value, str):
-        return "str"
-    return "json"
-
-
-
-def _generic_input_spec(description=None):
-    return SignalSpec.record(
-        schema={"payload": "json"},
-        accepted_profiles=(
-            AcceptedSignalProfile(signal_type="record", schema={"payload": "json"}),
-            AcceptedSignalProfile(signal_type="scalar"),
-        ),
-        description=description,
-    )
 
 
 class Boltz2AffinityPredictor(BioModule):
@@ -127,6 +112,7 @@ class Boltz2AffinityPredictor(BioModule):
         self.runtime_setup_timeout_s = runtime_setup_timeout_s
         self.progress_heartbeat_s = max(0.0, float(progress_heartbeat_s))
 
+        self.model_dir = Path(__file__).resolve().parents[1]
         repo_root = Path(__file__).resolve().parents[3]
         self.runtime_dir = (
             Path(runtime_dir).expanduser().resolve()
@@ -138,21 +124,58 @@ class Boltz2AffinityPredictor(BioModule):
 
         self._protein_sequence: Optional[str] = default_protein_sequence.strip() if isinstance(default_protein_sequence, str) and default_protein_sequence.strip() else None
         self._ligand_smiles: Optional[str] = default_ligand_smiles.strip() if isinstance(default_ligand_smiles, str) and default_ligand_smiles.strip() else None
-        self._msa_path: Optional[str] = str(Path(default_msa_path).expanduser().resolve()) if isinstance(default_msa_path, str) and default_msa_path.strip() else None
+        self._msa_path: Optional[str] = (
+            str(self._resolve_default_path(default_msa_path))
+            if isinstance(default_msa_path, str) and default_msa_path.strip()
+            else None
+        )
         self._run_options: Dict[str, Any] = _coerce_run_options(default_run_options)
         self._outputs: Dict[str, BioSignal] = {}
         self._output_payloads: Dict[str, Any] = {}
 
     def inputs(self) -> dict[str, SignalSpec]:
         return {
-            'protein_sequence': _generic_input_spec(),
-            'ligand_smiles': _generic_input_spec(),
-            'msa_path': _generic_input_spec(),
-            'run_options': _generic_input_spec(),
+            "protein_sequence": SignalSpec.scalar(
+                dtype="str",
+                format="sequence",
+                description="One amino-acid residue sequence.",
+            ),
+            "ligand_smiles": SignalSpec.scalar(
+                dtype="str",
+                format="smiles",
+                description="One molecule represented as molecular SMILES.",
+            ),
+            "msa_path": SignalSpec.scalar(
+                dtype="str",
+                value_type="file",
+                format="a3m",
+                required=False,
+                description="Path to a precomputed A3M alignment.",
+            ),
+            "run_options": SignalSpec.record(
+                schema={"payload": "json"},
+                description="Operational Boltz options; intentionally unstandardized.",
+            ),
         }
 
     def outputs(self) -> dict[str, SignalSpec]:
         return {
+            "binding_probability": SignalSpec.scalar(
+                dtype="float64",
+                emitted_unit="1",
+                description="Boltz affinity_probability_binary output.",
+            ),
+            "affinity_log10_ic50_micromolar": SignalSpec.scalar(
+                dtype="float64",
+                emitted_unit="1",
+                description="Boltz log10(IC50) with IC50 expressed in micromolar.",
+            ),
+            "predicted_structure": SignalSpec.scalar(
+                dtype="str",
+                value_type="file",
+                format="mmcif",
+                description="Top-ranked predicted protein-ligand complex in mmCIF.",
+            ),
             'affinity_summary': SignalSpec.record(schema={'payload': 'json'}, description='Parsed Boltz affinity summary for the latest run'),
             'confidence_summary': SignalSpec.record(schema={'payload': 'json'}, description='Parsed Boltz confidence summary for the top-ranked prediction'),
             'structure_artifacts': SignalSpec.record(schema={'payload': 'json'}, description='Absolute paths to the latest Boltz output artifacts'),
@@ -178,7 +201,9 @@ class Boltz2AffinityPredictor(BioModule):
         msa_signal = signals.get("msa_path")
         if msa_signal is not None:
             msa_path = _coerce_string(_signal_value(msa_signal), "path")
-            self._msa_path = msa_path
+            self._msa_path = (
+                str(Path(msa_path).expanduser().resolve()) if msa_path is not None else None
+            )
 
         run_signal = signals.get("run_options")
         if run_signal is not None:
@@ -212,6 +237,21 @@ class Boltz2AffinityPredictor(BioModule):
             self._set_error_payload(error)
             self._emit_outputs(t)
             return
+        if str(resolved["output_format"]).strip().lower() != "mmcif":
+            error = "output_format must be mmcif for the standardized predicted_structure output"
+            self._emit_progress("error", error)
+            self._set_error_payload(error)
+            self._emit_outputs(t)
+            return
+        if not resolved["use_msa_server"]:
+            try:
+                self._validate_msa_query_matches_protein()
+            except (OSError, UnicodeError, ValueError) as exc:
+                error = f"invalid msa_path: {exc}"
+                self._emit_progress("error", error)
+                self._set_error_payload(error)
+                self._emit_outputs(t)
+                return
 
         run_root = self._create_run_root()
         request_path = run_root / "request.yaml"
@@ -235,6 +275,9 @@ class Boltz2AffinityPredictor(BioModule):
             "runtime_setup_commands": [],
             "cache_repaired": False,
             "retry_count": 0,
+            "boltz_version": "2.0.2",
+            "biosimulant_version": _biosimulant_version,
+            "compatibility": self._compatibility_provenance(),
         }
 
         try:
@@ -288,6 +331,33 @@ class Boltz2AffinityPredictor(BioModule):
         self._emit_progress("outputs", "Publishing Boltz-2 structure and summary artifacts")
         confidence_summary = self._load_json(confidence_path)
         affinity_summary = self._load_json(affinity_path) if affinity_path is not None else {}
+        atomic_outputs: Dict[str, Any] = {
+            "predicted_structure": str(structure_path),
+        }
+        warnings: list[str] = []
+        probability = affinity_summary.get("affinity_probability_binary")
+        if probability is None:
+            warnings.append("Boltz did not emit affinity_probability_binary.")
+        elif isinstance(probability, bool) or not isinstance(probability, (int, float)) or not math.isfinite(float(probability)) or not 0 <= float(probability) <= 1:
+            metadata["status"] = "error"
+            metadata["error"] = "Boltz emitted an invalid affinity_probability_binary value"
+            self._set_error_payload(metadata["error"], metadata=metadata)
+            self._emit_outputs(t)
+            return
+        else:
+            atomic_outputs["binding_probability"] = float(probability)
+
+        affinity_value = affinity_summary.get("affinity_pred_value")
+        if affinity_value is None:
+            warnings.append("Boltz did not emit affinity_pred_value.")
+        elif isinstance(affinity_value, bool) or not isinstance(affinity_value, (int, float)) or not math.isfinite(float(affinity_value)):
+            metadata["status"] = "error"
+            metadata["error"] = "Boltz emitted an invalid affinity_pred_value"
+            self._set_error_payload(metadata["error"], metadata=metadata)
+            self._emit_outputs(t)
+            return
+        else:
+            atomic_outputs["affinity_log10_ic50_micromolar"] = float(affinity_value)
         artifacts = {
             "prediction_dir": str(prediction_dir),
             "structure_file": str(structure_path),
@@ -307,7 +377,10 @@ class Boltz2AffinityPredictor(BioModule):
 
         metadata["status"] = "completed"
         metadata["prediction_dir"] = str(prediction_dir)
+        if warnings:
+            metadata["warnings"] = warnings
         self._output_payloads = {
+            **atomic_outputs,
             "affinity_summary": affinity_summary,
             "confidence_summary": confidence_summary,
             "structure_artifacts": artifacts,
@@ -346,6 +419,44 @@ class Boltz2AffinityPredictor(BioModule):
                 "boltz[cuda]==2.0.2" if resolved["accelerator"] == "gpu" else "boltz==2.0.2"
             )
         return resolved
+
+    def _resolve_default_path(self, value: str) -> Path:
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = self.model_dir / path
+        return path.resolve()
+
+    def _validate_msa_query_matches_protein(self) -> None:
+        if not self._msa_path or not self._protein_sequence:
+            raise ValueError("both msa_path and protein_sequence are required")
+        path = Path(self._msa_path)
+        if not path.is_file():
+            raise ValueError(f"A3M file does not exist: {path}")
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if not lines or not lines[0].startswith(">"):
+            raise ValueError("A3M must begin with a FASTA-style query header")
+        query_parts: list[str] = []
+        for line in lines[1:]:
+            if line.startswith(">"):
+                break
+            query_parts.append(line)
+        query = "".join(query_parts).replace("-", "").replace(".", "").upper()
+        protein = "".join(self._protein_sequence.split()).upper()
+        if not query:
+            raise ValueError("A3M query sequence is empty")
+        if query != protein:
+            raise ValueError("A3M query sequence does not match protein_sequence")
+
+    def _compatibility_provenance(self) -> Optional[dict[str, Any]]:
+        manifest_path = self.model_dir / "model.yaml"
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+            provenance = compatibility_provenance(manifest)
+        except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+            return None
+        if provenance is not None:
+            provenance["runtime_version"] = _biosimulant_version
+        return provenance
 
     def _create_run_root(self) -> Path:
         base_dir = self.work_dir
@@ -765,7 +876,7 @@ class Boltz2AffinityPredictor(BioModule):
         raise FileNotFoundError(f"no prediction folders under {predictions_root} and no direct outputs under {output_dir}")
 
     def _find_structure_file(self, prediction_dir: Path) -> Path:
-        for pattern in ("*_model_0.cif", "*_model_0.pdb"):
+        for pattern in ("*_model_0.cif", "*_model_0.mmcif"):
             candidate = next(prediction_dir.glob(pattern), None)
             if candidate is not None:
                 return Path(candidate)
@@ -780,7 +891,7 @@ class Boltz2AffinityPredictor(BioModule):
     def _looks_like_prediction_dir(self, directory: Path) -> bool:
         for pattern in (
             "*_model_0.cif",
-            "*_model_0.pdb",
+            "*_model_0.mmcif",
             "confidence_*_model_0.json",
             "affinity_*.json",
             "plddt_*_model_0.npz",
@@ -793,7 +904,7 @@ class Boltz2AffinityPredictor(BioModule):
         parents: set[Path] = set()
         for pattern in (
             "**/*_model_0.cif",
-            "**/*_model_0.pdb",
+            "**/*_model_0.mmcif",
             "**/confidence_*_model_0.json",
             "**/affinity_*.json",
             "**/plddt_*_model_0.npz",
@@ -844,7 +955,7 @@ class Boltz2AffinityPredictor(BioModule):
                     pairs.append((label, value))
         if isinstance(affinity, Mapping):
             for key, label in (
-                ("affinity_pred_value", "Affinity Prediction"),
+                ("affinity_pred_value", "Predicted log10(IC50 in µM)"),
                 ("affinity_probability_binary", "Binder Probability"),
             ):
                 value = affinity.get(key)
@@ -884,9 +995,20 @@ class Boltz2AffinityPredictor(BioModule):
 
     def _emit_outputs(self, t: float) -> None:
         source = getattr(self, "_world_name", self.__class__.__name__)
-        self._outputs = {
-            "affinity_summary": _make_signal(source=source, name="affinity_summary", value=self._output_payloads.get("affinity_summary", {}), emitted_at=t, spec=self.outputs().get("affinity_summary") if 'self' in locals() else None),
-            "confidence_summary": _make_signal(source=source, name="confidence_summary", value=self._output_payloads.get("confidence_summary", {}), emitted_at=t, spec=self.outputs().get("confidence_summary") if 'self' in locals() else None),
-            "structure_artifacts": _make_signal(source=source, name="structure_artifacts", value=self._output_payloads.get("structure_artifacts", {}), emitted_at=t, spec=self.outputs().get("structure_artifacts") if 'self' in locals() else None),
-            "run_metadata": _make_signal(source=source, name="run_metadata", value=self._output_payloads.get("run_metadata", {}), emitted_at=t, spec=self.outputs().get("run_metadata") if 'self' in locals() else None),
-        }
+        specs = getattr(self, "_biosimulant_manifest_output_specs", None) or self.outputs()
+        outputs: Dict[str, BioSignal] = {}
+        for name, value in self._output_payloads.items():
+            spec = specs[name]
+            if spec.contract is not None:
+                result = check_payload(spec.contract, value)
+                if result.status == "blocked":
+                    messages = "; ".join(issue.message for issue in result.issues)
+                    raise ValueError(f"Compatibility validation failed for {name}: {messages}")
+            outputs[name] = _make_signal(
+                source=source,
+                name=name,
+                value=value,
+                emitted_at=t,
+                spec=spec,
+            )
+        self._outputs = outputs

@@ -16,7 +16,7 @@ packages:
     visibility: public
   - id: boltz-boltz2-affinity-predictor-lab
     package: boltz-boltz2-affinity-predictor
-    version: 1.0.0
+    version: 1.1.0
     type: lab
     path: labs/boltz-boltz2-affinity-predictor
     visibility: public

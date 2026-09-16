@@ -1,96 +1,27 @@
-# Boltz: Boltz2AffinityPredictor
+# Boltz-2 affinity model
 
-Native `biosim.BioModule` wrapper around `boltz predict` for a focused
-Boltz-2 protein-ligand affinity workflow.
+This `biosimulant.BioModule` wraps `boltz predict` from
+`boltz[cuda]==2.0.2`. It accepts one protein, one molecular SMILES value, and
+either a matching A3M file or explicit MSA-server mode.
 
-## What It Does
+The precise scientific ports are:
 
-- accepts a single protein sequence and single ligand SMILES
-- supports either:
-  - an explicit `msa_path` input, or
-  - `use_msa_server: true`
-- writes a Boltz YAML request into a run directory
-- bootstraps a local managed Boltz runtime on first use by default
-- executes the managed `boltz` CLI
-- exposes compact BioSignals for:
-  - `affinity_summary`
-  - `confidence_summary`
-  - `structure_artifacts`
-  - `run_metadata`
-- exposes visuals for compatible clients:
-  - `structure3d` for the top-ranked `mmCIF` or `PDB` artifact
-  - `table` for key affinity and confidence metrics
+- `protein_sequence` → `protein.sequence/v1`
+- `ligand_smiles` → `chemical.smiles/v1`
+- `msa_path` → `protein.multiple-sequence-alignment/v1`
+- `binding_probability` → `boltz.binding-probability/v1`
+- `affinity_log10_ic50_micromolar` → `boltz.log10-ic50-micromolar/v1`
+- `predicted_structure` → `protein-ligand.complex-structure-mmcif/v1`
 
-## Input Ports
+`run_options`, the three aggregate summaries, and `run_metadata` are
+operational or multi-field records and intentionally have no profile.
 
-| Input | Meaning |
-|---|---|
-| `protein_sequence` | Target protein sequence as a string or `{sequence: ...}` payload |
-| `ligand_smiles` | Ligand SMILES string or `{smiles: ...}` payload |
-| `msa_path` | Optional path to a precomputed MSA file |
-| `run_options` | Optional per-run overrides such as `use_msa_server`, `output_format`, or `template_path` |
+Boltz's `affinity_pred_value` is `log10(IC50)` with IC50 expressed in
+micromolar. It is not pIC50. The model accepts mmCIF output only, checks an A3M
+query against the protein before compute, validates atomic values, and does not
+emit placeholder atomic outputs after failure.
 
-## Output Ports
-
-| Output | Meaning |
-|---|---|
-| `affinity_summary` | Parsed affinity JSON payload from Boltz |
-| `confidence_summary` | Parsed top-model confidence JSON payload from Boltz |
-| `structure_artifacts` | Absolute paths to generated structure and summary artifacts |
-| `run_metadata` | Command, output directory, status, and captured logs |
-
-## Runtime Behavior
-
-By default this module is self-contained at the wrapper level:
-
-- it creates a local virtual environment under `.runtime/boltz2`
-- it uses a repo-local cache under `.runtime/boltz-cache` unless `cache_dir` is
-  overridden
-- it installs Boltz there on first run
-- it then reuses that managed runtime on later runs
-- it retries once after purging known-corrupted cached assets such as
-  `mols.tar`, `mols/`, or partial checkpoint files
-
-Important constraints:
-- internet access is still required on the first run so the managed runtime can
-  install Boltz and its dependencies
-- GPU-oriented execution is still the intended default
-- large model weights, MSAs, and generated structures are not checked into this
-  repository
-
-You can still opt into external-runtime behavior with `runtime_mode: external`,
-but the default is `managed`.
-
-## Remote Execution
-
-This package is also prepared for the generic BioSim remote executor path.
-
-- the manifest pins `boltz[cuda]==2.0.2` so the remote sandbox installs the
-  CUDA optional dependencies required by Boltz on Modal GPUs through the normal
-  runtime dependency policy
-- the manifest declares remote-only init overrides so Modal runs force
-  `runtime_mode: external`
-- remote runs place the Boltz cache under
-  `${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz` so model weights and CCD
-  downloads persist across runs on the mounted remote volume
-- remote provider preflight checks fail early on missing Modal auth, invalid
-  mount roots, missing packaged mounts, or invalid remote size settings
-- local runs keep the self-contained managed-runtime default
-
-For release-grade end-to-end validation, target Linux + NVIDIA GPU on Modal.
-Local macOS runs remain useful for smoke-testing the wrapper only.
-
-## Visualization Contract
-
-After a successful run, `visualize()` returns:
-- a `structure3d` card backed by the selected structure artifact
-- a `table` summary for affinity and confidence highlights
-
-The structure visual uses the shared BioSim payload shape:
-- `source.kind = "artifact"`
-- `source.artifact_id = <stable id>`
-- `source.path = <absolute path>` for local/desktop consumers
-- `format = "mmcif" | "pdb"`
-
-BioSim SimUI strips `source.path` before sending visuals to the browser and
-serves the structure through the artifact endpoint instead.
+Managed mode creates a cached local Boltz environment and retains the existing
+single cache-repair retry. Remote mode uses the GPU runtime image and stores the
+Boltz cache under the remote execution mount. See the Lab-level README for the
+complete interface, defaults, validation commands, and scientific limits.

@@ -37,7 +37,81 @@ def test_instantiation(biosim, tmp_path):
     assert module.cache_dir is not None
     assert module.cache_dir.name == "boltz-cache"
     assert set(module.inputs()) == {"protein_sequence", "ligand_smiles", "msa_path", "run_options"}
-    assert set(module.outputs()) == {"affinity_summary", "confidence_summary", "structure_artifacts", "run_metadata"}
+    assert set(module.outputs()) == {
+        "binding_probability",
+        "affinity_log10_ic50_micromolar",
+        "predicted_structure",
+        "affinity_summary",
+        "confidence_summary",
+        "structure_artifacts",
+        "run_metadata",
+    }
+    assert module.inputs()["protein_sequence"].format == "sequence"
+    assert module.inputs()["ligand_smiles"].format == "smiles"
+    assert module.inputs()["msa_path"].value_type == "file"
+    assert module.inputs()["msa_path"].format == "a3m"
+    assert module.outputs()["predicted_structure"].format == "mmcif"
+    assert module.outputs()["binding_probability"].emitted_unit == "1"
+
+
+def test_manifest_profiles_bind_to_precise_python_ports(biosim, tmp_path):
+    from biosim.compatibility import bind_manifest_ports
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+
+    model_dir = Path(__file__).resolve().parents[1]
+    manifest = yaml.safe_load((model_dir / "model.yaml").read_text(encoding="utf-8"))
+    module = Boltz2AffinityPredictor(work_dir=str(tmp_path))
+    inputs, outputs = bind_manifest_ports(module, manifest)
+
+    assert inputs["protein_sequence"].contract == {
+        "profile": "protein.sequence/v1",
+        "species": "any",
+    }
+    assert inputs["msa_path"].contract == {
+        "profile": "protein.multiple-sequence-alignment/v1",
+    }
+    assert outputs["binding_probability"].contract == {
+        "profile": "boltz.binding-probability/v1",
+    }
+    assert outputs["predicted_structure"].contract == {
+        "profile": "protein-ligand.complex-structure-mmcif/v1",
+    }
+
+
+@pytest.mark.parametrize(
+    ("port", "value"),
+    [
+        ("binding_probability", 1.01),
+        ("affinity_log10_ic50_micromolar", float("nan")),
+    ],
+)
+def test_atomic_outputs_are_checked_against_profiles(biosim, tmp_path, port, value):
+    from biosim.compatibility import bind_manifest_ports
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+
+    model_dir = Path(__file__).resolve().parents[1]
+    manifest = yaml.safe_load((model_dir / "model.yaml").read_text(encoding="utf-8"))
+    module = Boltz2AffinityPredictor(work_dir=str(tmp_path))
+    bind_manifest_ports(module, manifest)
+    module._output_payloads = {port: value}
+
+    with pytest.raises(ValueError, match="Compatibility validation failed"):
+        module._emit_outputs(0.0)
+
+
+def test_packaged_default_msa_resolves_from_model_directory_and_matches_protein(biosim, tmp_path):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+
+    sequence = "MVTPEGNVSLVDESLLVGVTDEDRAVRSAHQFYERLIGLWAPAVMEAAHELGVFAALAEAPADSGELARRLDCDARAMRVLLDALYAYDVIDRIHDTNGFRYLLSAEARECLLPGTLFSLVGKFMHDINVAWPAWRNLAEVVRHGARDTSGAESPNGIAQEDYESLVGGINFWAPPIVTTLSRKLRASGRSGDATASVLDVGCGTGLYSQLLLREFPRWTATGLDVERIATLANAQALRLGVEERFATRAGDFWRGGWGTGYDLVLFANIFHLQTPASAVRLMRHAAACLAPDGLVAVVDQIVDADREPKTPQDRFALLFAASMTNTGGGDAYTFQEYEEWFTAAGLQRIETLDTPMHRILLARRATEPSAVPEGQASENLYFQ"
+    module = Boltz2AffinityPredictor(
+        work_dir=str(tmp_path),
+        default_protein_sequence=sequence,
+        default_ligand_smiles="CCO",
+        default_msa_path="assets/seq1.a3m",
+    )
+
+    assert Path(module._msa_path).is_file()
+    module._validate_msa_query_matches_protein()
 
 
 def test_request_document_with_explicit_msa(biosim, tmp_path):
@@ -68,16 +142,28 @@ def test_request_document_with_server_mode(biosim, tmp_path):
     assert "msa" not in request["sequences"][0]["protein"]
 
 
-def test_request_document_supports_empty_msa(biosim, tmp_path):
+def test_mismatched_msa_is_blocked_before_compute(biosim, tmp_path, monkeypatch):
     from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
     from biosim.signals import BioSignal
 
+    msa = tmp_path / "mismatch.a3m"
+    msa.write_text(">query\nAAAA\n", encoding="utf-8")
     module = Boltz2AffinityPredictor(work_dir=str(tmp_path))
-    _set_required_inputs(module, BioSignal, msa_path="empty")
+    _set_required_inputs(module, BioSignal, msa_path=str(msa))
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: pytest.fail("compute should not start"))
 
-    document = module._build_request_document(module._resolved_options())
-    request = yaml.safe_load(document)
-    assert request["sequences"][0]["protein"]["msa"] == "empty"
+    outputs = module.execute(
+        {},
+        context=ExecutionContext(
+            policy=ExecutionPolicy.ONCE_BEFORE_RUN,
+            run_start=0.0,
+            run_end=0.1,
+        ),
+    )
+
+    assert "does not match" in _signal_value(outputs["run_metadata"])["error"]
+    assert "binding_probability" not in outputs
+    assert "predicted_structure" not in outputs
 
 
 def test_missing_inputs_surface_error_metadata(biosim, tmp_path):
@@ -92,6 +178,11 @@ def test_missing_inputs_surface_error_metadata(biosim, tmp_path):
 
     assert _signal_value(outputs["run_metadata"])["status"] == "error"
     assert "protein_sequence" in _signal_value(outputs["run_metadata"])["error"]
+    assert not {
+        "binding_probability",
+        "affinity_log10_ic50_micromolar",
+        "predicted_structure",
+    } & set(outputs)
     assert module.visualize() is None
 
 
@@ -147,6 +238,9 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert metadata["runtime_bootstrapped"] is True
     assert metadata["cache_dir"].endswith("boltz-cache")
     assert _signal_value(outputs["affinity_summary"])["affinity_probability_binary"] == 0.97
+    assert _signal_value(outputs["binding_probability"]) == 0.97
+    assert _signal_value(outputs["affinity_log10_ic50_micromolar"]) == -1.2
+    assert Path(_signal_value(outputs["predicted_structure"])).suffix == ".cif"
     assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.91
     assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).is_absolute()
     assert Path(_signal_value(outputs["structure_artifacts"])["affinity_file"]).is_absolute()
@@ -154,8 +248,31 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert any("-m" in command and "pip" in command and any(item.startswith("boltz") for item in command) for command in commands)
     assert any("--cache" in command for command in commands if command and command[0].endswith("boltz"))
     assert metadata["resolved_boltz_executable"].endswith("/bin/boltz")
+    assert metadata["boltz_version"] == "2.0.2"
+    assert metadata["biosimulant_version"] == "0.0.29"
+    assert metadata["compatibility"]["version"] == "0"
 
     assert module.visualize() is None
+
+
+def test_pdb_override_is_blocked_before_compute(biosim, tmp_path, monkeypatch):
+    from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
+    from biosim.signals import BioSignal
+
+    module = Boltz2AffinityPredictor(work_dir=str(tmp_path), use_msa_server=True)
+    _set_required_inputs(module, BioSignal, run_options={"output_format": "pdb"})
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: pytest.fail("compute should not start"))
+    outputs = module.execute(
+        {},
+        context=ExecutionContext(
+            policy=ExecutionPolicy.ONCE_BEFORE_RUN,
+            run_start=0.0,
+            run_end=0.1,
+        ),
+    )
+
+    assert "must be mmcif" in _signal_value(outputs["run_metadata"])["error"]
+    assert "predicted_structure" not in outputs
 
 
 def test_generated_structure_paths_remain_absolute_without_canonicalizing(biosim, tmp_path):
@@ -452,6 +569,9 @@ def test_legacy_success_layout_without_affinity_json_is_accepted(biosim, tmp_pat
     metadata = _signal_value(outputs["run_metadata"])
     assert metadata["status"] == "completed"
     assert _signal_value(outputs["affinity_summary"]) == {}
+    assert "binding_probability" not in outputs
+    assert "affinity_log10_ic50_micromolar" not in outputs
+    assert Path(_signal_value(outputs["predicted_structure"])).is_file()
     assert _signal_value(outputs["confidence_summary"])["confidence_score"] == 0.84
     assert Path(_signal_value(outputs["structure_artifacts"])["structure_file"]).is_absolute()
     assert Path(_signal_value(outputs["structure_artifacts"])["confidence_file"]).is_absolute()
@@ -727,4 +847,3 @@ def _generic_input_spec(description=None):
         ),
         description=description,
     )
-

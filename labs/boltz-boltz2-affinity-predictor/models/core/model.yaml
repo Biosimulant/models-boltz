@@ -1,18 +1,22 @@
 schema_version: "2.0"
 title: "Boltz: Boltz2AffinityPredictor"
-description: "Wraps the native Boltz-2 CLI for single protein and single ligand affinity-focused structural runs."
+description: "Wraps Boltz 2.0.2 for one protein, one ligand, affinity prediction, and a top-ranked complex structure."
 package: "Biosimulant/models-boltz:labs/boltz-boltz2-affinity-predictor/models/core/model.yaml"
-version: "7651a2829b60b601aef619a028a589b63d414c92"
+version: "1.1.0"
 standard: other
 tags: [boltz, docking, structural-biology, affinity, protein-ligand, gpu]
 authors: ["Biosimulant Team"]
+compatibility:
+  standard: biosimulant.model-compatibility
+  version: "0"
 biosim:
   communication_step: 0.01
   entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
 runtime:
-  python_version: '3.10'
+  python_version: "3.10"
   dependencies:
     packages:
+      - biosimulant==0.0.29
       - boltz[cuda]==2.0.2
       - pyyaml==6.0.2
   remote:
@@ -25,47 +29,48 @@ runtime:
 parameters:
   - name: default_protein_sequence
     value: null
-    description: "Fallback amino-acid sequence used when the protein_sequence input signal is not wired."
+    description: "Fallback amino-acid sequence used when protein_sequence is not wired."
   - name: default_ligand_smiles
     value: null
-    description: "Fallback SMILES string used when the ligand_smiles input signal is not wired."
+    description: "Fallback molecular SMILES used when ligand_smiles is not wired."
   - name: default_msa_path
     value: null
-    description: "Optional fallback path to a pre-computed MSA (.a3m). When null and use_msa_server is true, Boltz queries the configured MSA server."
+    description: "Fallback A3M path. Relative paths resolve from this model directory."
   - name: default_run_options
     value: {}
-    description: "Default Boltz run options merged onto any run_options input signal."
+    description: "Default operational options merged with run_options."
   - name: boltz_executable
     value: "boltz"
-    description: "Name of the Boltz CLI binary to invoke. Override only if the runtime exposes Boltz under a different name."
+    description: "Boltz CLI executable name or absolute path."
   - name: runtime_mode
     value: "managed"
-    description: "managed | external. Managed installs Boltz into a local venv on first run; external assumes the runtime image already provides it."
+    description: "managed installs the pinned Boltz package locally; external uses the runtime image."
   - name: runtime_python
     value: null
-    description: "Optional python interpreter to use for the managed runtime install. Defaults to the platform's bundled python when null."
+    description: "Optional Python 3.10-3.12 interpreter for the managed runtime."
   - name: boltz_package_spec
     value: null
-    description: "Optional pip spec for managed-runtime installs. Defaults to the version pinned in runtime.dependencies.packages."
+    description: "Optional managed-runtime pip spec; defaults to boltz[cuda]==2.0.2 on GPU."
   - name: upgrade_runtime
     value: false
-    description: "Force a reinstall of the managed Boltz runtime even if it is already cached."
+    description: "Reinstall the managed Boltz runtime when true."
   - name: accelerator
     value: "gpu"
-    description: "gpu | cpu. Boltz-2 is GPU-bound for any non-trivial input. CPU mode is for plumbing tests only."
+    description: "gpu for scientific runs; cpu is intended only for plumbing tests."
   - name: devices
     value: 1
     min: 1
     description: "Number of accelerator devices."
   - name: use_msa_server
     value: false
-    description: "If true, Boltz fetches MSAs from the configured server. Required when default_msa_path is unset."
+    description: "When true, Boltz obtains an MSA from its configured server instead of msa_path."
   - name: output_format
     value: "mmcif"
-    description: "Boltz output format. mmcif | pdb."
+    allowed_values: [mmcif]
+    description: "Lab 1.1.0 exposes the standardized structure output as mmCIF only."
   - name: override
     value: true
-    description: "Overwrite existing Boltz output directory if present."
+    description: "Allow Boltz to replace an existing output directory."
   - name: recycling_steps
     value: 3
     min: 1
@@ -82,38 +87,93 @@ parameters:
     value: 3600.0
     min: 1.0
     units: "s"
-    description: "Timeout for any single Boltz CLI invocation."
+    description: "Timeout for a Boltz CLI invocation."
   - name: runtime_setup_timeout_s
     value: 1800.0
     min: 1.0
     units: "s"
-    description: "Timeout for the managed-runtime install step."
+    description: "Timeout for managed-runtime setup."
   - name: progress_heartbeat_s
     value: 30.0
     min: 0.0
     units: "s"
-    description: "Interval between BSIM_PROGRESS heartbeat events while Boltz is running."
+    description: "Interval between progress events while Boltz is running."
   - name: integration_step
     value: 0.01
     min: 0.001
     units: "s"
-    description: "BioWorld integration step. Boltz is event-driven so this only paces the wrapper."
+    description: "BioWorld integration step; the wrapper itself runs once before the Lab."
 io:
   inputs:
     - name: protein_sequence
-      description: "Amino-acid sequence string. Overrides default_protein_sequence when present."
+      signal_type: scalar
+      dtype: str
+      format: sequence
+      contract:
+        profile: protein.sequence/v1
+        species: any
+      description: "One amino-acid sequence."
     - name: ligand_smiles
-      description: "SMILES string for the ligand. Overrides default_ligand_smiles when present."
+      signal_type: scalar
+      dtype: str
+      format: smiles
+      contract:
+        profile: chemical.smiles/v1
+      description: "One molecule represented as molecular SMILES."
     - name: msa_path
-      description: "Optional path to a pre-computed MSA (.a3m). Overrides default_msa_path when present."
+      signal_type: scalar
+      dtype: str
+      value_type: file
+      format: a3m
+      required: false
+      contract:
+        profile: protein.multiple-sequence-alignment/v1
+      description: "A3M file whose query sequence must match protein_sequence."
     - name: run_options
-      description: "Boltz options dict merged onto default_run_options."
+      signal_type: record
+      schema:
+        payload: json
+      description: "Operational Boltz configuration; intentionally unstandardized."
   outputs:
+    - name: binding_probability
+      signal_type: scalar
+      dtype: float64
+      emitted_unit: "1"
+      contract:
+        profile: boltz.binding-probability/v1
+      description: "Boltz affinity_probability_binary, from 0 through 1."
+    - name: affinity_log10_ic50_micromolar
+      signal_type: scalar
+      dtype: float64
+      emitted_unit: "1"
+      contract:
+        profile: boltz.log10-ic50-micromolar/v1
+      description: "Boltz affinity_pred_value: log10(IC50) with IC50 expressed in micromolar."
+    - name: predicted_structure
+      signal_type: scalar
+      dtype: str
+      value_type: file
+      format: mmcif
+      contract:
+        profile: protein-ligand.complex-structure-mmcif/v1
+      description: "Top-ranked predicted protein-ligand complex as an mmCIF file."
     - name: affinity_summary
-      description: "Parsed Boltz affinity summary for the latest run (binding probability, predicted affinity in pIC50)."
+      signal_type: record
+      schema:
+        payload: json
+      description: "Multi-field Boltz affinity aggregate retained for existing consumers."
     - name: confidence_summary
-      description: "Parsed Boltz confidence summary for the top-ranked prediction (pTM, ipTM, pLDDT)."
+      signal_type: record
+      schema:
+        payload: json
+      description: "Boltz confidence aggregate for the top-ranked prediction."
     - name: structure_artifacts
-      description: "Absolute paths to the latest Boltz output artifacts (mmCIF or PDB structure files)."
+      signal_type: record
+      schema:
+        payload: json
+      description: "Operational collection of Boltz output artifact paths."
     - name: run_metadata
-      description: "Execution metadata and captured logs. payload.status='ok' on success, 'error' if validation or the Boltz CLI failed."
+      signal_type: record
+      schema:
+        payload: json
+      description: "Status, logs, command, cache information, and compatibility provenance."

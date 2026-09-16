@@ -240,8 +240,7 @@ class DockingVisualisationModel(BioModule):
         confidence = confidence if isinstance(confidence, Mapping) else {}
         affinity = affinity if isinstance(affinity, Mapping) else {}
         candidates = [
-            ("Affinity-like value", affinity.get("affinity_pred_value", affinity.get("predicted_affinity_value"))),
-            ("Affinity unit", affinity.get("affinity_unit", affinity.get("predicted_affinity_unit"))),
+            ("Predicted log10(IC50 in µM)", affinity.get("affinity_pred_value")),
             ("Binder probability", affinity.get("affinity_probability_binary")),
             ("Confidence score", confidence.get("confidence_score")),
             ("pTM", confidence.get("ptm", confidence.get("mean_ptm"))),
