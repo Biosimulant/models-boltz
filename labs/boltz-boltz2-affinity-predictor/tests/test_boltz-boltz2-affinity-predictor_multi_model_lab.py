@@ -21,6 +21,8 @@ def test_lab_manifest_uses_embedded_visualisation_model():
     assert core["parameters"]["use_msa_server"] is False
     assert core["parameters"]["default_msa_path"] == "assets/seq1.a3m"
     assert core["parameters"]["output_format"] == "mmcif"
+    inputs = {entry["name"]: entry for entry in manifest["io"]["inputs"]}
+    assert inputs["msa_path"]["file"]["accept"] == [".a3m"]
     outputs = {entry["name"]: entry["maps_to"] for entry in manifest["io"]["outputs"]}
     assert outputs["binding_probability"].endswith(".binding_probability")
     assert outputs["affinity_log10_ic50_micromolar"].endswith(

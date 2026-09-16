@@ -28,8 +28,6 @@ io:
     file:
       accept:
       - .a3m
-      - .fasta
-      - .fa
     ui:
       control: file
     name: msa_path
