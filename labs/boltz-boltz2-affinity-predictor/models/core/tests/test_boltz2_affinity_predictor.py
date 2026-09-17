@@ -14,6 +14,7 @@ from biosim.modules import ExecutionContext, ExecutionPolicy
 import yaml
 from biosim.signals import unwrap_payload as _signal_value
 from biosim.signals import make_signal as _make_signal
+from biosimulant import __version__ as _biosimulant_runtime_version
 
 
 def _set_required_inputs(module, BioSignal, *, msa_path: str | None = None, run_options: dict | None = None):
@@ -249,7 +250,7 @@ def test_managed_runtime_bootstraps_and_parses_outputs(biosim, tmp_path, monkeyp
     assert any("--cache" in command for command in commands if command and command[0].endswith("boltz"))
     assert metadata["resolved_boltz_executable"].endswith("/bin/boltz")
     assert metadata["boltz_version"] == "2.0.2"
-    assert metadata["biosimulant_version"] == "0.0.31"
+    assert metadata["biosimulant_version"] == _biosimulant_runtime_version
     assert metadata["compatibility"]["version"] == "0"
 
     assert module.visualize() is None

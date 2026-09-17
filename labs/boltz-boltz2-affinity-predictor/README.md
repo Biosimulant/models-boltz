@@ -4,7 +4,9 @@ This GPU Lab wraps `boltz[cuda]==2.0.2` for one protein and one ligand. It
 predicts a protein-ligand complex, reports Boltz affinity outputs, and retains
 the existing confidence and artifact summaries used by the visualisation.
 
-Lab version `1.1.1` uses `biosimulant==0.0.31` and compatibility standard `0`.
+Lab version `1.1.1` uses `biosimulant==0.0.33` and compatibility standard `0`.
+It adds declared execution policies to both models and changes no ports,
+profiles, parameters or scientific behaviour.
 It is a new revision of the Hub `1.0.0` and `1.1.0` Labs; it does not alter those
 published releases.
 
