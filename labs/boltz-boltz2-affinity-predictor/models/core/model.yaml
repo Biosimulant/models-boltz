@@ -16,7 +16,7 @@ runtime:
   python_version: "3.10"
   dependencies:
     packages:
-      - biosimulant==0.0.29
+      - biosimulant==0.0.30
       - boltz[cuda]==2.0.2
       - pyyaml==6.0.2
   remote:

@@ -4,7 +4,7 @@ This GPU Lab wraps `boltz[cuda]==2.0.2` for one protein and one ligand. It
 predicts a protein-ligand complex, reports Boltz affinity outputs, and retains
 the existing confidence and artifact summaries used by the visualisation.
 
-Lab version `1.1.0` uses `biosimulant==0.0.29` and compatibility standard `0`.
+Lab version `1.1.0` uses `biosimulant==0.0.30` and compatibility standard `0`.
 It is a new revision of the Hub `1.0.0` Lab; it does not alter that published
 release.
 
@@ -52,6 +52,13 @@ before Boltz runs because the public `predicted_structure` contract is mmCIF.
 | `confidence_summary` | Unstandardized | Original Boltz confidence record |
 | `structure_artifacts` | Unstandardized | Operational collection of artifact paths |
 | `run_metadata` | Unstandardized | Status, command, logs, cache details, versions, and compatibility provenance |
+
+Another model may consume a Boltz output without declaring a profile when its
+ordinary port structure accepts the value. Biosimulant allows that connection
+with `PROFILE_PARTIAL`, meaning the consumer's scientific interpretation is not
+verified. A consumer that intentionally accepts the exact Boltz-defined value
+may declare the matching `boltz.*` profile; the prefix describes the value and
+does not restrict which models may consume it.
 
 Boltz defines `affinity_pred_value` as `log10(IC50)` where IC50 is expressed in
 micromolar. Lower values imply stronger predicted affinity. It is not pIC50,
