@@ -154,3 +154,22 @@ wiring:
 - from: boltz_boltz2_affinity_predictor.run_metadata
   to:
   - visualisation.boltz_boltz2_affinity_predictor_run_metadata
+intended_use: Research use only. Predicts a protein-ligand complex structure and Boltz-2
+  affinity-style outputs for one protein sequence and one small-molecule SMILES, for
+  exploratory comparison of related candidates against the same target. Not for clinical,
+  diagnostic, or regulatory decisions.
+caveats:
+- All affinity, binding probability, confidence, and structure values are Boltz-2 model
+  predictions, not experimental measurements.
+- affinity_log10_ic50_micromolar is the Boltz affinity_pred_value, log10(IC50) with IC50
+  in micromolar. It is not pIC50 and is not comparable with another concentration basis
+  or logarithmic convention without an explicit adapter.
+- Compatibility checks establish representation and interface meaning only; they do not
+  establish molecular identity, MSA quality, binding, structural accuracy, experimental
+  validity, or clinical usefulness.
+- The default run uses the packaged A3M for the packaged protein. A different protein
+  requires a matching A3M or explicitly enabling the MSA server.
+- A scientific run requires one CUDA GPU; CPU mode is intended only for plumbing tests.
+licenses:
+- Apache-2.0
+- CC-BY-4.0
