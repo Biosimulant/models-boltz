@@ -20,6 +20,7 @@ biosim:
     assembler_alias: abl1_imatinib_setup
     interpreter_alias: kinase_prediction_interpreter
   communication_step: 0.01
+  execution_policy: once_before_run
 parameters:
 - name: integration_step
   value: 0.01

@@ -34,6 +34,7 @@ biosim:
       - Nilotinib
     integration_step: 0.01
   communication_step: 0.01
+  execution_policy: once_before_run
 runtime:
   dependencies:
     packages: []

@@ -33,5 +33,5 @@ scientific_context:
   question: Can Boltz-2 predict a protein-ligand complex remotely and return a renderable
     3D structure inside the desktop app?
 title: Boltz-2 Remote Example
-version: 1.0.0
+version: 1.0.1
 wiring: []

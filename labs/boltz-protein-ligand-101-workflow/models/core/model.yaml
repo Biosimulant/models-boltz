@@ -7,6 +7,7 @@ tags: [boltz, boltz-workflow, structural-biology, affinity, protein-ligand, gpu]
 authors: ["Biosimulant Team"]
 biosim:
   communication_step: 0.01
+  execution_policy: "once_before_run"
   entrypoint: "src.boltz2_affinity_predictor:Boltz2AffinityPredictor"
 runtime:
   python_version: '3.10'
