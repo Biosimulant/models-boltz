@@ -18,7 +18,7 @@ DEFAULT_DESKTOP_BIN = DESKTOP_SRC_TAURI / "target" / "debug" / "biosimulant-desk
 MODEL_DIR = REPO_ROOT / "models" / "models-boltz" / "models" / "boltz-boltz2-affinity-predictor"
 EXAMPLE_CONFIG = REPO_ROOT / "models" / "models-boltz" / "examples" / "boltz2-minimal" / "config.yaml"
 DEFAULT_OUTPUT = Path.cwd() / "Boltz2_Remote_GPU_Example.bsilab"
-HUB_API_BASE = "https://prod-api.biosimulant.com/api"
+HUB_API_BASE = "https://api.biosimulant.com/api"
 
 
 def parse_example_inputs(config_path: Path) -> tuple[str, str]:
