@@ -52,7 +52,7 @@ def signals(system, options=None):
 def mock_client(monkeypatch, handler):
     client_class = httpx.Client
     monkeypatch.setattr(model.httpx, "Client", lambda **kwargs: client_class(transport=httpx.MockTransport(handler), **kwargs))
-    monkeypatch.setenv("NVIDIA_API_KEY", "test-credential-not-valid")
+    monkeypatch.setenv("NVIDIA_API_KEY", "unit-key")
     monkeypatch.setattr(model.time, "sleep", lambda _: None)
 
 
@@ -125,7 +125,7 @@ def test_single_submission_then_poll_and_portable_outputs(monkeypatch, molecular
     raw = json.dumps(native_response, indent=2).encode()
     def handler(request):
         calls.append(request)
-        assert request.headers["authorization"] == "Bearer test-credential-not-valid"
+        assert request.headers["authorization"] == "Bearer unit-key"
         if len(calls) == 1: return httpx.Response(202, headers={"nvcf-reqid": REQUEST_ID})
         return httpx.Response(200, content=raw, headers={"nvcf-reqid": REQUEST_ID})
     mock_client(monkeypatch, handler)
@@ -138,7 +138,7 @@ def test_single_submission_then_poll_and_portable_outputs(monkeypatch, molecular
     assert result["predicted_complexes"]["items"][0]["sha256"] == model.digest(native_response["structures"][0]["structure"].encode())
     for name, port in model.NvidiaBoltz2().outputs().items():
         assert make_signal(spec=port, value=result[name], source="main", name=name, emitted_at=0.0).value == result[name]
-    assert "test-credential-not-valid" not in json.dumps(result)
+    assert "unit-key" not in json.dumps(result)
 
 
 @pytest.mark.parametrize("status", [302, 401, 422, 429, 500])
@@ -146,12 +146,12 @@ def test_http_error_no_retry_or_credential_redirect(monkeypatch, molecular_syste
     calls = []
     def handler(request):
         calls.append(request)
-        return httpx.Response(status, headers={"location": "https://untrusted.invalid/steal"}, content=b"test-credential-not-valid")
+        return httpx.Response(status, headers={"location": "https://untrusted.invalid/steal"}, content=b"unit-key")
     mock_client(monkeypatch, handler)
     with pytest.raises(model.ProviderObservationError) as error:
         model.NvidiaBoltz2().execute(signals(molecular_system), context=CONTEXT)
     assert len(calls) == 1
-    assert "test-credential-not-valid" not in str(error.value)
+    assert "unit-key" not in str(error.value)
     assert "untrusted" not in str(error.value)
 
 
@@ -159,12 +159,12 @@ def test_transport_failure_does_not_resubmit(monkeypatch, molecular_system):
     calls = []
     def handler(request):
         calls.append(request)
-        raise httpx.ReadTimeout("secret: test-credential-not-valid")
+        raise httpx.ReadTimeout("secret: unit-key")
     mock_client(monkeypatch, handler)
     with pytest.raises(model.ProviderObservationError) as error:
         model.NvidiaBoltz2().execute(signals(molecular_system), context=CONTEXT)
     assert len(calls) == 1
-    assert "test-credential-not-valid" not in str(error.value)
+    assert "unit-key" not in str(error.value)
     assert "request_sha256=" in str(error.value)
 
 
