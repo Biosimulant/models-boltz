@@ -110,5 +110,3 @@ def inspect_structure(
         "protein_sequence_matches": True,
         "ligand_heavy_elements_match": True,
     }
-
-

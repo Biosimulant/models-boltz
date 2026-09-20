@@ -26,4 +26,3 @@ def test_stereochemistry_survives_descriptors():
     a,b=descriptors(bundle)
     assert a['molecular_mass_g_mol']==b['molecular_mass_g_mol']
     assert a['canonical_isomeric_smiles']!=b['canonical_isomeric_smiles']
-
