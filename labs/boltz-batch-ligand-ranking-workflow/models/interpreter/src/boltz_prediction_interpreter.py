@@ -126,8 +126,10 @@ class BoltzPredictionInterpreterModel(BioModule):
             "caveat": context.get("caveat") or self.caveat,
         }
         if self.mode == "batch":
-            evidence["ranked_ligand_count"] = len(batch.get("ranked_ligands") or [])
-            evidence["top_ligand"] = batch.get("top_ligand") or metrics.get("top_ligand")
+            evidence["ranked_ligand_count"] = batch.get("completed_count", 0)
+            evidence["top_ligand"] = batch.get("top_ligand_name") or metrics.get("top_ligand")
+            evidence["batch_counts"] = {key: batch.get(key) for key in ("submitted_count", "evaluated_count", "completed_count", "failed_count")}
+            evidence["ranking_basis"] = batch.get("ranking_basis")
 
         source = getattr(self, "_world_name", self.__class__.__name__)
         self._outputs = {
@@ -157,7 +159,7 @@ class BoltzPredictionInterpreterModel(BioModule):
         }
         ranked = batch.get("ranked_ligands")
         if isinstance(ranked, list) and ranked:
-            first = ranked[0] if isinstance(ranked[0], Mapping) else {}
+            first = next((row for row in ranked if isinstance(row, Mapping) and row.get("status") == "completed"), {})
             metrics["top_ligand"] = first.get("ligand") or first.get("name")
             metrics["top_rank_binder_probability"] = first.get("binder_probability")
             metrics["top_rank_affinity_like_value"] = first.get("affinity_like_value")
@@ -165,10 +167,11 @@ class BoltzPredictionInterpreterModel(BioModule):
 
     @staticmethod
     def _observed_answer(status: str, metrics: Mapping[str, Any]) -> str:
-        if status != "completed":
+        if status not in {"completed", "partial"}:
             return "No completed Boltz prediction is available for this run."
         if "top_ligand" in metrics:
-            return f"{metrics['top_ligand']} is the top-ranked completed ligand in this configured batch run."
+            qualifier = " Some submitted ligands failed; this is a partial comparison." if status == "partial" else ""
+            return f"{metrics['top_ligand']} is the top-ranked completed ligand in this configured batch run.{qualifier}"
         if "binder_probability" in metrics:
             return f"Boltz-2 emitted a binder-probability style score of {metrics['binder_probability']} for this configured pair."
         if "confidence_score" in metrics:

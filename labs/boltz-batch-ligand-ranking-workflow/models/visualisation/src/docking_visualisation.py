@@ -257,16 +257,12 @@ class DockingVisualisationModel(BioModule):
         confidence = self._input_value("confidence_summary")
         affinity = self._input_value("affinity_summary")
         batch = self._input_value("batch_summary")
-        if not isinstance(run_metadata, Mapping) or run_metadata.get("status") != "completed":
+        if not isinstance(run_metadata, Mapping) or run_metadata.get("status") not in {"completed", "partial", "error"}:
             return None
         if not isinstance(artifacts, Mapping) or not isinstance(batch, Mapping):
             return None
         structure_path = self._resolved_path(artifacts.get("structure_file"))
-        if structure_path is None:
-            return None
-        structure_format = self._structure_format(structure_path)
-        if structure_format is None:
-            return None
+        structure_format = self._structure_format(structure_path) if structure_path else None
         annotations = self._build_boltz_annotations(confidence, affinity)
         rows = []
         ranked = batch.get("ranked_ligands")
@@ -278,19 +274,21 @@ class DockingVisualisationModel(BioModule):
                     [
                         str(row.get("rank") or ""),
                         str(row.get("ligand") or ""),
-                        "" if row.get("binder_probability") is None else str(row.get("binder_probability")),
-                        "" if row.get("affinity_like_value") is None else str(row.get("affinity_like_value")),
-                        "" if row.get("confidence") is None else str(row.get("confidence")),
+                        "" if row.get("binder_probability") is None else f'{row["binder_probability"]:.3g}',
+                        "" if row.get("affinity_like_value") is None else f'{row["affinity_like_value"]:.3g}',
+                        "" if row.get("confidence") is None else f'{row["confidence"]:.3g}',
+                        str(row.get("status") or ""),
+                        str(row.get("error") or ""),
                         "; ".join(str(item) for item in row.get("flags", []) if item),
                     ]
                 )
-        return [
+        visuals = [
             {
                 "render": "structure3d",
                 "description": "Top-ranked Boltz-2 complex from the latest batch ligand ranking run.",
                 "data": {
                     "title": "Top-Ranked Batch Complex",
-                    "source": {"kind": "artifact", "artifact_id": self._artifact_id(structure_path), "path": str(structure_path)},
+                    "source": {"kind": "artifact", "artifact_id": self._artifact_id(structure_path) if structure_path else "", "path": str(structure_path)},
                     "format": structure_format,
                     "annotations": [{"label": label, "value": value} for label, value in annotations],
                     "initial_view": {"reset_camera": True},
@@ -298,14 +296,15 @@ class DockingVisualisationModel(BioModule):
             },
             {
                 "render": "table",
-                "description": "Ranked ligand table from the latest Boltz-2 batch run.",
+                "description": str(batch.get("ranking_basis") or "Ranked completed ligands; failed rows have no rank."),
                 "data": {
-                    "title": "Batch Ligand Ranking",
-                    "columns": ["Rank", "Ligand", "Binder Probability", "Affinity-Like Value", "Confidence", "Flags"],
+                    "title": f"Batch Ligand Ranking ({run_metadata.get('status')})",
+                    "columns": ["Rank", "Ligand", "Binder Probability", "Predicted log10(IC50 / µM)", "Confidence", "Status", "Error", "Flags"],
                     "rows": rows,
                 },
             },
         ]
+        return visuals if structure_path and structure_format else visuals[1:]
 
     def _visualize_diffdock(self) -> Optional[list[dict[str, Any]]]:
         run_metadata = self._input_value("run_metadata")
