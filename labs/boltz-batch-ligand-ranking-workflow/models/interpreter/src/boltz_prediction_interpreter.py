@@ -98,6 +98,8 @@ class BoltzPredictionInterpreterModel(BioModule):
         emitted_at = float(end if end is not None else self.integration_step)
         context = _coerce_mapping(self._inputs.get("scenario_context"))
         assembled = _coerce_mapping(self._inputs.get("assembled_boltz_request"))
+        if isinstance(assembled.get("effective_context"), Mapping):
+            context = dict(assembled["effective_context"])
         affinity = _coerce_mapping(self._inputs.get(f"{self.core_alias}_affinity_summary"))
         confidence = _coerce_mapping(self._inputs.get(f"{self.core_alias}_confidence_summary"))
         artifacts = _coerce_mapping(self._inputs.get(f"{self.core_alias}_structure_artifacts"))
@@ -122,12 +124,15 @@ class BoltzPredictionInterpreterModel(BioModule):
                 "has_affinity_file": bool(artifacts.get("affinity_file")),
             },
             "request_summary": assembled,
+            "input_provenance": assembled.get("input_provenance"),
             "dominant_module": self.core_alias,
             "caveat": context.get("caveat") or self.caveat,
         }
         if self.mode == "batch":
-            evidence["ranked_ligand_count"] = len(batch.get("ranked_ligands") or [])
-            evidence["top_ligand"] = batch.get("top_ligand") or metrics.get("top_ligand")
+            evidence["ranked_ligand_count"] = batch.get("completed_count", 0)
+            evidence["top_ligand"] = batch.get("top_ligand_name") or metrics.get("top_ligand")
+            evidence["batch_counts"] = {key: batch.get(key) for key in ("submitted_count", "evaluated_count", "completed_count", "failed_count", "not_started_count")}
+            evidence["ranking_basis"] = batch.get("ranking_basis")
 
         source = getattr(self, "_world_name", self.__class__.__name__)
         self._outputs = {
@@ -157,7 +162,7 @@ class BoltzPredictionInterpreterModel(BioModule):
         }
         ranked = batch.get("ranked_ligands")
         if isinstance(ranked, list) and ranked:
-            first = ranked[0] if isinstance(ranked[0], Mapping) else {}
+            first = next((row for row in ranked if isinstance(row, Mapping) and row.get("status") == "completed"), {})
             metrics["top_ligand"] = first.get("ligand") or first.get("name")
             metrics["top_rank_binder_probability"] = first.get("binder_probability")
             metrics["top_rank_affinity_like_value"] = first.get("affinity_like_value")
@@ -165,10 +170,11 @@ class BoltzPredictionInterpreterModel(BioModule):
 
     @staticmethod
     def _observed_answer(status: str, metrics: Mapping[str, Any]) -> str:
-        if status != "completed":
+        if status not in {"completed", "partial"}:
             return "No completed Boltz prediction is available for this run."
         if "top_ligand" in metrics:
-            return f"{metrics['top_ligand']} is the top-ranked completed ligand in this configured batch run."
+            qualifier = " Some submitted ligands failed; this is a partial comparison." if status == "partial" else ""
+            return f"{metrics['top_ligand']} is the top-ranked completed ligand in this configured batch run.{qualifier}"
         if "binder_probability" in metrics:
             return f"Boltz-2 emitted a binder-probability style score of {metrics['binder_probability']} for this configured pair."
         if "confidence_score" in metrics:

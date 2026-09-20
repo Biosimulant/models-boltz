@@ -5,7 +5,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import tempfile
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -79,6 +81,7 @@ class Boltz2BatchLigandRanker(BioModule):
         runtime_setup_timeout_s: float = 1800.0,
         progress_heartbeat_s: float = 30.0,
         integration_step: float = 0.01,
+        execution_budget_s: float = 1500.0,
     ) -> None:
         self.integration_step = float(integration_step)
         self._protein_sequence = default_protein_sequence.strip() if isinstance(default_protein_sequence, str) and default_protein_sequence.strip() else None
@@ -86,6 +89,9 @@ class Boltz2BatchLigandRanker(BioModule):
         self._msa_path = default_msa_path.strip() if isinstance(default_msa_path, str) and default_msa_path.strip() else None
         self._run_options = _coerce_run_options(default_run_options)
         self.max_ligands = max(1, int(max_ligands))
+        if isinstance(execution_budget_s, bool) or not isinstance(execution_budget_s, (int, float)) or not math.isfinite(execution_budget_s) or not 0 < execution_budget_s <= 1500:
+            raise ValueError("execution_budget_s must be finite and in (0, 1500]")
+        self.execution_budget_s = float(execution_budget_s)
 
         self.runner_kwargs = {
             "boltz_executable": boltz_executable,
@@ -183,12 +189,23 @@ class Boltz2BatchLigandRanker(BioModule):
             self._emit_outputs(t)
             return
         if len(ligands) > self.max_ligands:
-            ligands = ligands[: self.max_ligands]
+            self._set_error_payload(
+                f"submitted {len(ligands)} ligands exceeds max_ligands={self.max_ligands}; split the CSV into smaller batches",
+                metadata={"submitted_count": len(ligands), "evaluated_count": 0},
+            )
+            self._emit_outputs(t)
+            return
+        if self._run_options.get("ranking_mode", "active_affinity") not in {"active_affinity", "binder_probability"}:
+            self._set_error_payload("ranking_mode must be active_affinity or binder_probability")
+            self._emit_outputs(t)
+            return
 
         run_root = self._create_run_root()
         rows: list[dict[str, Any]] = []
         per_ligand_metadata: list[dict[str, Any]] = []
         top_payload: dict[str, Any] | None = None
+        deadline = time.monotonic() + self.execution_budget_s
+        evaluated_count = 0
 
         for index, ligand in enumerate(ligands, start=1):
             name = ligand["name"]
@@ -201,36 +218,45 @@ class Boltz2BatchLigandRanker(BioModule):
                     "workflow_context": "Guided Boltz-2 batch ligand ranking workflow",
                 }
             )
-            runner = Boltz2AffinityPredictor(
-                default_protein_sequence=self._protein_sequence,
-                default_ligand_smiles=ligand["smiles"],
-                default_msa_path=self._msa_path,
-                default_run_options=ligand_options,
-                work_dir=str(ligand_run_dir),
-                **self.runner_kwargs,
-            )
-            outputs = runner.execute(
-                {},
-                context=ExecutionContext(
-                    policy=ExecutionPolicy.ONCE_BEFORE_RUN,
-                    run_start=0.0,
-                    run_end=1.0,
-                ),
-            )
+            started = time.monotonic() < deadline
+            if not started:
+                outputs = {}
+            else:
+                evaluated_count += 1
+                runner = Boltz2AffinityPredictor(
+                    default_protein_sequence=self._protein_sequence,
+                    default_ligand_smiles=ligand["smiles"],
+                    default_msa_path=self._msa_path,
+                    default_run_options=ligand_options,
+                    work_dir=str(ligand_run_dir),
+                    execution_deadline=deadline,
+                    **self.runner_kwargs,
+                )
+                outputs = runner.execute(
+                    {},
+                    context=ExecutionContext(
+                        policy=ExecutionPolicy.ONCE_BEFORE_RUN,
+                        run_start=0.0,
+                        run_end=1.0,
+                    ),
+                )
             affinity = self._payload(outputs.get("affinity_summary"))
             confidence = self._payload(outputs.get("confidence_summary"))
             artifacts = self._payload(outputs.get("structure_artifacts"))
             metadata = self._payload(outputs.get("run_metadata"))
+            if not started:
+                metadata = {"status": "not_started", "error": "batch execution budget exhausted before this ligand could start"}
             status = metadata.get("status") if isinstance(metadata, Mapping) else "error"
 
             row = self._build_row(index, ligand, status, affinity, confidence, metadata)
+            status = row["status"]
             rows.append(row)
             per_ligand_metadata.append(
                 {
                     "rank_input_order": index,
                     "ligand": name,
                     "status": status,
-                    "error": metadata.get("error") if isinstance(metadata, Mapping) else None,
+                    "error": row["error"],
                 }
             )
             if status == "completed":
@@ -246,16 +272,36 @@ class Boltz2BatchLigandRanker(BioModule):
                     top_payload = candidate
 
         ranked_rows = self._rank_rows(rows)
+        completed_count = sum(row["status"] == "completed" for row in rows)
+        batch_status = "completed" if completed_count == len(ligands) else "partial" if completed_count else "error"
+        batch_summary = {
+            "status": batch_status,
+            "ranking_mode": self._run_options.get("ranking_mode", "active_affinity"),
+            "ranking_basis": (
+                "affinity_pred_value ascending (lower is stronger); binder probability descending breaks ties"
+                if self._run_options.get("ranking_mode", "active_affinity") == "active_affinity"
+                else "affinity_probability_binary descending; affinity_pred_value ascending breaks ties"
+            ),
+            "affinity_unit": "log10(IC50 / micromolar)",
+            "top_ligand_name": top_payload["ligand"]["name"] if top_payload else None,
+            "ligand_count": len(ligands),
+            "submitted_count": len(ligands),
+            "evaluated_count": evaluated_count,
+            "not_started_count": len(ligands) - evaluated_count,
+            "execution_budget_s": self.execution_budget_s,
+            "completed_count": completed_count,
+            "failed_count": len(rows) - completed_count,
+            "ranked_ligands": ranked_rows,
+            "interpretation": "Predicted scores only; no experimental validation or uncertainty interval. Active-affinity mode assumes known active ligands for the submitted target.",
+        }
         if top_payload is None:
             self._set_error_payload(
                 "all ligand runs failed",
-                metadata={"status": "error", "ligand_runs": per_ligand_metadata},
+                metadata={**batch_summary, "ligand_runs": per_ligand_metadata},
             )
+            self._output_payloads["batch_summary"] = {**batch_summary, "error": "all ligand runs failed"}
             self._emit_outputs(t)
             return
-
-        for rank, row in enumerate(ranked_rows, start=1):
-            row["rank"] = rank
 
         top_name = top_payload["ligand"]["name"]
         top_affinity = dict(top_payload["affinity_summary"])
@@ -266,26 +312,20 @@ class Boltz2BatchLigandRanker(BioModule):
         top_metadata = dict(top_payload["run_metadata"])
         top_metadata.update(
             {
-                "status": "completed",
+                "status": batch_status,
                 "workflow_name": self._run_options.get("workflow_name", "Batch Ligand Ranking"),
-                "batch_status": "completed",
+                "batch_status": batch_status,
                 "ligand_count": len(ligands),
+                "submitted_count": len(ligands),
+                "evaluated_count": evaluated_count,
+                "not_started_count": len(ligands) - evaluated_count,
+                "execution_budget_s": self.execution_budget_s,
                 "completed_count": sum(1 for row in rows if row["status"] == "completed"),
                 "failed_count": sum(1 for row in rows if row["status"] != "completed"),
                 "top_ligand_name": top_name,
                 "ligand_runs": per_ligand_metadata,
             }
         )
-        batch_summary = {
-            "status": "completed",
-            "ranking_basis": "affinity_probability_binary desc, then affinity_pred_value desc",
-            "top_ligand_name": top_name,
-            "ligand_count": len(ligands),
-            "completed_count": top_metadata["completed_count"],
-            "failed_count": top_metadata["failed_count"],
-            "ranked_ligands": ranked_rows,
-            "interpretation": "Use as an early comparison table only; follow-up review and validation are required.",
-        }
         self._output_payloads = {
             "batch_summary": batch_summary,
             "affinity_summary": top_affinity,
@@ -316,7 +356,7 @@ class Boltz2BatchLigandRanker(BioModule):
             name = str(row.get(name_key) or f"Ligand {index}").strip()
             smiles = str(row.get(smiles_key) or "").strip()
             if not smiles:
-                continue
+                raise ValueError(f"row {index} ({name}) has no SMILES; no ligands were evaluated")
             metadata = {
                 key: str(value).strip()
                 for key, value in row.items()
@@ -339,7 +379,21 @@ class Boltz2BatchLigandRanker(BioModule):
         metadata = metadata if isinstance(metadata, Mapping) else {}
         binder_probability = affinity.get("affinity_probability_binary")
         affinity_value = affinity.get("affinity_pred_value")
+        error = metadata.get("error")
+        if status == "completed" and (
+            not self._finite_number(binder_probability)
+            or not 0 <= binder_probability <= 1
+            or not self._finite_number(affinity_value)
+        ):
+            status = "error"
+            error = "invalid affinity output: require finite affinity and binder probability in [0, 1]"
+        if not self._finite_number(binder_probability) or not 0 <= binder_probability <= 1:
+            binder_probability = None
+        if not self._finite_number(affinity_value):
+            affinity_value = None
         confidence_score = confidence.get("confidence_score")
+        if not self._finite_number(confidence_score):
+            confidence_score = None
         flags = self._flags(status, binder_probability, confidence_score, metadata)
         return {
             "input_order": index,
@@ -350,20 +404,33 @@ class Boltz2BatchLigandRanker(BioModule):
             "affinity_like_value": affinity_value,
             "confidence": confidence_score,
             "status": status,
+            "error": error,
             "flags": flags,
         }
 
     def _rank_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return sorted(rows, key=self._ranking_key, reverse=True)
+        ranked = sorted(rows, key=self._ranking_key, reverse=True)
+        rank = 0
+        for row in ranked:
+            if row.get("status") == "completed":
+                rank += 1
+                row["rank"] = rank
+            else:
+                row["rank"] = None
+        return ranked
 
-    def _ranking_key(self, row: Mapping[str, Any]) -> tuple[float, float]:
+    @staticmethod
+    def _finite_number(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    def _ranking_key(self, row: Mapping[str, Any]) -> tuple[bool, float, float]:
         probability = row.get("binder_probability")
         affinity = row.get("affinity_like_value")
-        if not isinstance(probability, (int, float)):
-            probability = -1.0
-        if not isinstance(affinity, (int, float)):
-            affinity = float("-inf")
-        return float(probability), float(affinity)
+        if row.get("status") != "completed" or not self._finite_number(probability) or not self._finite_number(affinity):
+            return False, float("-inf"), float("-inf")
+        if self._run_options.get("ranking_mode", "active_affinity") == "binder_probability":
+            return True, float(probability), -float(affinity)
+        return True, -float(affinity), float(probability)
 
     def _flags(self, status: Any, binder_probability: Any, confidence_score: Any, metadata: Mapping[str, Any]) -> list[str]:
         flags: list[str] = []
@@ -372,12 +439,7 @@ class Boltz2BatchLigandRanker(BioModule):
             if metadata.get("error"):
                 flags.append("check run metadata")
             return flags
-        if isinstance(confidence_score, (int, float)) and float(confidence_score) < 0.5:
-            flags.append("low confidence")
-        if isinstance(binder_probability, (int, float)) and float(binder_probability) < 0.35:
-            flags.append("likely weak/non-binder")
-        if not flags:
-            flags.append("review pose before follow-up")
+        flags.append("review pose before follow-up; score thresholds are not calibrated")
         return flags
 
     def _payload(self, signal: BioSignal | None) -> Any:

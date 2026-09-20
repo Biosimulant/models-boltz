@@ -52,6 +52,7 @@ class WorkflowContextModel(BioModule):
     ) -> dict[str, BioSignal]:
         emitted_at = float(end if end is not None else self.integration_step)
         payload = dict(self.scenario)
+        payload["context_role"] = "Packaged example only; see assembled_boltz_request.effective_context for the actual submitted inputs"
         payload.setdefault("scientific_status", "source-backed workflow context")
         payload.setdefault(
             "caveat",

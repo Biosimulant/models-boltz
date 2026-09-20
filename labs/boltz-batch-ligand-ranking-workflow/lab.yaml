@@ -20,6 +20,7 @@ models:
   parameters:
     scenario:
       workflow_name: Batch Ligand Ranking
+      ranking_mode: active_affinity
       workflow_context: Guided Boltz-2 batch ligand ranking workflow using ABL1 kinase-domain
         examples
       workflow_question: How does a small ligand library rank against the shared ABL1
@@ -42,13 +43,21 @@ models:
     workflow_name: Batch Ligand Ranking
     workflow_kind: batch
     default_protein_sequence: VSPNYDKWEMERTDITMKHKLGGGQYGEVYEGVWKKYSLTVAVKTLKEDTMEVEEFLKEAAVMKEIKHPNLVQLLGVCTREPPFYIITEFMTYGNLLDYLRECNRQEVNAVVLLYMATQISSAMEYLEKKNFIHRDLAARNCLVGENHLVKVADFGLSRLMTGDTYTAHAGAKFPIKWTAPESLAYNKFSIKSDVWAFGVLLWEIATYGMSPYPGIDLSQVYELLEKDYRMERPEGCPEKVYELMRACWQWNPSDRPSFAEIHQAFETMFQES
-    default_ligand_csv: |
-      name,smiles,source
-      Imatinib,CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem CID 5291
-      Dasatinib,CC1=C(C(=CC=C1)Cl)NC(=O)C2=CN=C(S2)NC3=CC(=NC(=N3)C)N4CCN(CC4)CCO,PubChem CID 3062316
-      Nilotinib,CC1=C(C=C(C=C1)C(=O)NC2=CC(=CC(=C2)C(F)(F)F)N3C=C(N=C3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem CID 644241
+    default_ligand_csv: 'name,smiles,source
+
+      Imatinib,CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem
+      CID 5291
+
+      Dasatinib,CC1=C(C(=CC=C1)Cl)NC(=O)C2=CN=C(S2)NC3=CC(=NC(=N3)C)N4CCN(CC4)CCO,PubChem
+      CID 3062316
+
+      Nilotinib,CC1=C(C=C(C=C1)C(=O)NC2=CC(=CC(=C2)C(F)(F)F)N3C=C(N=C3)C)NC4=NC=CC(=N4)C5=CN=CC=C5,PubChem
+      CID 644241
+
+      '
     default_run_options:
       workflow_name: Batch Ligand Ranking
+      ranking_mode: active_affinity
       workflow_context: Guided Boltz-2 batch ligand ranking workflow using ABL1 kinase-domain
         examples
       interpretation_scope: Learning, small-set ranking, and early hypothesis generation
@@ -72,6 +81,7 @@ models:
     sampling_steps: 200
     diffusion_samples: 1
     max_ligands: 3
+    execution_budget_s: 1500
 - alias: ranking_interpreter
   path: models/interpreter
   parameters:
@@ -167,6 +177,17 @@ io:
     allowed_values:
     - mmcif
     - pdb
+  - name: ranking_mode
+    label: Ranking Task
+    description: Compare known actives by lower predicted log10(IC50 in micromolar),
+      or rank a mixed library by binder probability. Choose the mode for your submitted
+      compounds and target.
+    maps_to: ligand_library_loader.run_options.ranking_mode
+    value_type: string
+    default: active_affinity
+    allowed_values:
+    - active_affinity
+    - binder_probability
   - name: run_options
     label: Boltz Batch Run Options
     description: Optional structured controls for the batch workflow, including source
@@ -181,9 +202,9 @@ io:
       rows: 6
   outputs:
   - name: scenario_context
-    label: Workflow Scenario Context
-    description: Source-backed target, ligand, use-case, provenance, and caveat context
-      for this Boltz workflow.
+    label: Packaged Example Context
+    description: Context for the default example. For overridden inputs, use the effective
+      context and provenance in the assembled request.
     maps_to: batch_target_context.scenario_context
   - name: assembled_boltz_request
     label: Assembled Boltz Request
@@ -265,8 +286,28 @@ wiring:
   to:
   - visualisation.ranking_interpreter_prediction_evidence
 runtime:
-  python_version: '3.10'
+  python_version: '3.12'
   duration: 0.01
   communication_step: 0.01
   settle_steps: 1
   initial_inputs: {}
+intended_use: Exploratory comparison of a small ligand set against one submitted protein
+  target. Active-affinity mode compares known actives; binder-probability mode ranks
+  a mixed binder/decoy set. Predictions require independent validation.
+caveats:
+- Predicted affinity is log10(IC50 / micromolar), not an experimental measurement,
+  pIC50, or kcal/mol.
+- The bundled example is the ABL1 kinase-domain sequence from PDB 2HYY with three
+  known inhibitors; it contains no decoys and does not validate enrichment or selectivity.
+- The default uses one diffusion sample. Small score differences do not establish
+  a reproducible biological rank order; no uncertainty interval is supplied.
+- User-supplied sequences and ligands require their own identity, provenance, MSA,
+  and intended-use review; the curated ABL1 provenance describes the bundled example
+  only.
+- This wrapper represents one protein chain and one ligand per prediction; cofactors,
+  additional chains, and covalent chemistry are not represented.
+- GPU execution of this repaired revision remains unvalidated. Local tests replay
+  archived scores and simulated failures; they do not re-run Boltz or validate binding.
+licenses:
+- Apache-2.0
+- CC-BY-4.0

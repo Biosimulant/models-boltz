@@ -14,21 +14,24 @@ fields remain unchanged for compatibility with current Biosimulant products.
 
 ## Workflow Status
 
-This lab validates locally, exports as a portable `.bsilab` package, and has a successful private pre-publication GPU-backed run. It is published on Biosimulant Hub and now uses a multi-stage Compose graph. The graph separates source-backed context, input assembly, Boltz-2 prediction, conservative interpretation, and visual reporting.
+The Hub listing is private pending repair and validation. This working revision
+fixes task-specific ranking, invalid-score handling, partial batches and downstream
+reporting. Local tests exercise the five-stage graph using recorded GPU scores
+and simulated failures. They do not validate a new Boltz prediction or a biological
+rank order. GPU execution and publication of this repaired revision remain pending.
 
-Publication checklist:
+Replay provenance: run `df60d769-d0bb-492f-8219-915e81a2a1da`, artifact
+`workspace-results`, independently verified SHA-256
+`7ffb1ed1a5646e0ec4c9b9335e844e7335f9a747ce588b2a345a5c469ff6d8d9`.
+Using its recorded affinity values gives Dasatinib, Imatinib, Nilotinib. The former
+probability-based order was Dasatinib, Nilotinib, Imatinib. Both score types remain
+available, with an explicit scientific task selector.
 
-- manifest validation passes: complete
-- strict package export passes: complete
-- entrypoints import successfully: complete
-- unit tests pass: complete
-- at least one real GPU run completes: complete
-- run results include structure, affinity, confidence, metadata, and visuals: complete
-- screenshots/assets are captured from the real run: complete
-- Hub workflow card is public and points at the published lab id: complete
+Remaining release work includes an end-to-end run in the declared GPU environment,
+a run-wide execution budget, and verification that user overrides replace curated
+provenance consistently. This Lab stays private until those checks are resolved.
 
-
-## Pre-Publication Run Evidence
+## Historical Run Evidence (earlier revision)
 
 The current assets and metrics are derived from this private staged remote run:
 
@@ -93,7 +96,7 @@ This makes the Compose view match the workflow promise while keeping Boltz-2 as 
 - `msa_path`: optional path to a precomputed `.a3m` MSA file.
 - `run_options`: optional record for workflow/runtime options.
 
-The known example mode works because `lab.yaml` defines the target and ligand CSV defaults directly on the batch runner model. A new user can click Run without knowing YAML, SMILES formatting details, or Boltz CLI arguments.
+The known example mode works because `lab.yaml` defines the target and ligand CSV defaults on the input assembler. A new user can click Run without knowing YAML, SMILES formatting details, or Boltz CLI arguments.
 
 ## Outputs
 
@@ -107,13 +110,41 @@ The visualisation model turns these records into standard Biosimulant run visual
 
 ## Ranking Semantics
 
-The ranking table sorts by `affinity_probability_binary` descending, then `affinity_pred_value` descending when available. This maps to Boltz-2's distinction between binder-vs-decoy probability and affinity-like prediction.
+The default `active_affinity` mode compares the bundled known ABL1 inhibitors by
+`affinity_pred_value` ascending (lower predicts stronger binding), then binder
+probability descending to break ties. It assumes the submitted compounds are
+known active against the submitted target. For a mixed binder/decoy library, set
+`run_options.ranking_mode` to `binder_probability`; this sorts by probability
+descending, then affinity value ascending. These modes answer different questions.
 
-`affinity_probability_binary` is most useful as a binder-vs-decoy style signal. In product language, it is the binder probability.
+Boltz reports affinity as `log10(IC50 / micromolar)`, not kcal/mol. Binder
+probability is a separate classification score and is not a potency measurement.
+See the [upstream score definitions](https://github.com/jwohlwend/boltz/blob/main/docs/prediction.md).
+Scores are model predictions, not experimental measurements or uncertainty bounds.
+The default uses one diffusion sample; the displayed precision does not establish
+ranking reproducibility.
 
-`affinity_pred_value` is intended for ligand-optimization style use cases. In product language, it is an affinity-like value. It should be used cautiously and comparatively, not as a direct experimental measurement.
+Only completed runs with finite affinity values and probabilities in [0, 1] receive
+ranks. Failed rows remain visible with an error and no rank. A batch with failures
+is marked `partial`; an entirely failed batch has no top ligand. Submitted,
+evaluated, completed and failed counts are reported. Blank SMILES or more than
+`max_ligands` (default 3) reject the request before computation; no rows are silently
+omitted. Pose review reminders use no uncalibrated binding/confidence thresholds.
 
-Flags are conservative reminders, not decisions. A row marked `review pose before follow-up` still needs expert inspection. A low-confidence row should not be promoted based only on score.
+Runtime setup, prediction and retry subprocesses share a 1,500-second batch
+budget, leaving time within the managed 1,800-second limit to report results.
+The budget starts at the batch stage; environment startup and platform scheduling
+are outside this model's control. Remaining ligands are marked `not_started` when
+the budget expires and receive no score or rank. `evaluated_count` counts started
+ligands; `failed_count` includes every noncompleted row and `not_started_count`
+identifies those never attempted. These are partial comparisons, not full-library
+rankings. A cold runtime or slow external MSA service may consume the budget.
+
+The assembled request records hashes of the actual protein and ligand library.
+Changed inputs lose inherited example names and source claims. Reports use this
+resolved context; the separate context-stage output is explicitly the packaged
+example. User-supplied names and source metadata remain unverified. Explicitly
+blank inputs stay blank and fail validation rather than selecting the example.
 
 ## Safe Use Cases
 
@@ -135,7 +166,7 @@ Flags are conservative reminders, not decisions. A row marked `review pose befor
 
 ## Assets
 
-The current screenshots were captured from the successful private pre-publication GPU run above, using its persisted mmCIF structure artifact, ligand-ranking output, and parsed run metrics.
+The historical screenshots below were captured from the successful private pre-publication GPU run above, using its persisted mmCIF structure artifact, ligand-ranking output, and parsed run metrics.
 
 ![Boltz-2 predicted protein-ligand complex structure](assets/boltz2-affinity-structure-results.png)
 
