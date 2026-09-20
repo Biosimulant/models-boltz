@@ -1,0 +1,217 @@
+schema_version: '2.0'
+title: 'Boltz: Boltz2AffinityPredictor'
+description: Wraps Boltz 2.0.2 for one protein, one ligand, affinity prediction, and
+  a top-ranked complex structure.
+package: boltz-scientific-acceptance/core
+version: 0.1.0
+standard: other
+tags:
+- boltz
+- docking
+- structural-biology
+- affinity
+- protein-ligand
+- gpu
+authors:
+- Biosimulant Team
+compatibility:
+  standard: biosimulant.model-compatibility
+  version: '0'
+biosim:
+  communication_step: 0.01
+  execution_policy: once_before_run
+  entrypoint: src.boltz2_affinity_predictor:Boltz2AffinityPredictor
+runtime:
+  python_version: '3.10'
+  dependencies:
+    packages:
+    - biosimulant==0.0.36
+    - boltz[cuda]==2.0.2
+    - pyyaml==6.0.2
+  remote:
+    requirements:
+      accelerator: gpu
+      gpu_count: 1
+    init_kwargs:
+      runtime_mode: external
+      cache_dir: ${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz
+parameters:
+- name: default_protein_sequence
+  value: null
+  description: Fallback amino-acid sequence used when protein_sequence is not wired.
+- name: default_ligand_smiles
+  value: null
+  description: Fallback molecular SMILES used when ligand_smiles is not wired.
+- name: default_msa_path
+  value: null
+  description: Fallback A3M path. Relative paths resolve from this model directory.
+- name: default_run_options
+  value: {}
+  description: Default operational options merged with run_options.
+- name: boltz_executable
+  value: boltz
+  description: Boltz CLI executable name or absolute path.
+- name: runtime_mode
+  value: managed
+  description: managed installs the pinned Boltz package locally; external uses the
+    runtime image.
+- name: runtime_python
+  value: null
+  description: Optional Python 3.10-3.12 interpreter for the managed runtime.
+- name: boltz_package_spec
+  value: null
+  description: Optional managed-runtime pip spec; defaults to boltz[cuda]==2.0.2 on
+    GPU.
+- name: upgrade_runtime
+  value: false
+  description: Reinstall the managed Boltz runtime when true.
+- name: accelerator
+  value: gpu
+  description: gpu for scientific runs; cpu is intended only for plumbing tests.
+- name: devices
+  value: 1
+  min: 1
+  description: Number of accelerator devices.
+- name: use_msa_server
+  value: false
+  description: When true, Boltz obtains an MSA from its configured server instead
+    of msa_path.
+- name: output_format
+  value: mmcif
+  allowed_values:
+  - mmcif
+  description: Lab 1.1.1 exposes the standardized structure output as mmCIF only.
+- name: override
+  value: true
+  description: Allow Boltz to replace an existing output directory.
+- name: recycling_steps
+  value: 3
+  min: 1
+  description: Number of structure-recycling iterations.
+- name: sampling_steps
+  value: 200
+  min: 1
+  description: Diffusion sampling steps per pose.
+- name: diffusion_samples
+  value: 1
+  min: 1
+  description: Number of diffusion samples per run.
+- name: command_timeout_s
+  value: 3600.0
+  min: 1.0
+  units: s
+  description: Timeout for a Boltz CLI invocation.
+- name: runtime_setup_timeout_s
+  value: 1800.0
+  min: 1.0
+  units: s
+  description: Timeout for managed-runtime setup.
+- name: progress_heartbeat_s
+  value: 30.0
+  min: 0.0
+  units: s
+  description: Interval between progress events while Boltz is running.
+- name: integration_step
+  value: 0.01
+  min: 0.001
+  units: s
+  description: BioWorld integration step; the wrapper itself runs once before the
+    Lab.
+- name: protein_chain_id
+  value: A
+  description: Protein chain identifier written to the Boltz request.
+- name: ligand_chain_id
+  value: B
+  description: Ligand and affinity binder chain identifier.
+io:
+  inputs:
+  - name: protein_sequence
+    signal_type: scalar
+    dtype: str
+    format: sequence
+    contract:
+      profile: protein.sequence/v1
+      species: any
+    description: One amino-acid sequence.
+  - name: ligand_smiles
+    signal_type: scalar
+    dtype: str
+    format: smiles
+    contract:
+      profile: chemical.smiles/v1
+    description: One molecule represented as molecular SMILES.
+  - name: msa_path
+    signal_type: scalar
+    dtype: str
+    value_type: file
+    format: a3m
+    required: false
+    contract:
+      profile: protein.multiple-sequence-alignment/v1
+    description: A3M file whose query sequence must match protein_sequence.
+  - name: run_options
+    signal_type: record
+    schema:
+      payload: json
+    description: Operational Boltz configuration; intentionally unstandardized.
+  outputs:
+  - name: binding_probability
+    signal_type: scalar
+    dtype: float64
+    emitted_unit: '1'
+    contract:
+      profile: boltz.binding-probability/v1
+    description: Boltz affinity_probability_binary, from 0 through 1.
+  - name: affinity_log10_ic50_micromolar
+    signal_type: scalar
+    dtype: float64
+    emitted_unit: '1'
+    contract:
+      profile: boltz.log10-ic50-micromolar/v1
+    description: 'Boltz affinity_pred_value: log10(IC50) with IC50 expressed in micromolar.'
+  - name: predicted_structure
+    signal_type: scalar
+    dtype: str
+    value_type: file
+    format: mmcif
+    contract:
+      profile: protein-ligand.complex-structure-mmcif/v1
+    description: Top-ranked predicted protein-ligand complex as an mmCIF file.
+  - name: affinity_summary
+    signal_type: record
+    schema:
+      payload: json
+    description: Multi-field Boltz affinity aggregate retained for existing consumers.
+  - name: confidence_summary
+    signal_type: record
+    schema:
+      payload: json
+    description: Boltz confidence aggregate for the top-ranked prediction.
+  - name: structure_artifacts
+    signal_type: record
+    schema:
+      payload: json
+    description: Operational collection of Boltz output artifact paths.
+  - name: run_metadata
+    signal_type: record
+    schema:
+      payload: json
+    description: Status, logs, command, cache information, and compatibility provenance.
+  - name: requested_protein_sequence
+    signal_type: scalar
+    dtype: str
+    format: sequence
+    contract:
+      profile: protein.sequence/v1
+      species: any
+  - name: requested_ligand_smiles
+    signal_type: scalar
+    dtype: str
+    format: smiles
+    contract:
+      profile: chemical.smiles/v1
+  - name: requested_chains
+    signal_type: record
+    schema:
+      protein: str
+      ligand: str
