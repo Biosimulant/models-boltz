@@ -1,0 +1,67 @@
+schema_version: '2.0'
+package: boltz-scientific-acceptance/analysis
+version: 0.1.0
+title: Boltz output analysis
+standard: other
+compatibility:
+  standard: biosimulant.model-compatibility
+  version: '0'
+biosim:
+  entrypoint: src.analysis:BoltzAnalysis
+  communication_step: 0.01
+  execution_policy: once_before_run
+runtime:
+  dependencies:
+    packages:
+    - biosimulant==0.0.36
+    - biopython==1.84
+    - rdkit==2025.3.3
+io:
+  inputs:
+  - name: binding_probability
+    signal_type: scalar
+    dtype: float64
+    contract:
+      profile: boltz.binding-probability/v1
+    accepted_units:
+    - '1'
+  - name: affinity_log10_ic50_micromolar
+    signal_type: scalar
+    dtype: float64
+    contract:
+      profile: boltz.log10-ic50-micromolar/v1
+    accepted_units:
+    - '1'
+  - name: predicted_structure
+    signal_type: scalar
+    dtype: str
+    value_type: file
+    format: mmcif
+    contract:
+      profile: protein-ligand.complex-structure-mmcif/v1
+  - name: requested_protein_sequence
+    signal_type: scalar
+    dtype: str
+    format: sequence
+    contract:
+      profile: protein.sequence/v1
+      species: any
+  - name: requested_ligand_smiles
+    signal_type: scalar
+    dtype: str
+    format: smiles
+    contract:
+      profile: chemical.smiles/v1
+  - name: requested_chains
+    signal_type: record
+    schema:
+      protein: str
+      ligand: str
+  outputs:
+  - name: completed
+    signal_type: scalar
+    dtype: bool
+  - name: summary
+    signal_type: record
+    schema:
+      payload: json
