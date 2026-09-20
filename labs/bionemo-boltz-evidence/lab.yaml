@@ -1,0 +1,158 @@
+schema_version: '2.0'
+package: bionemo-boltz-evidence
+version: 0.1.0
+title: BioNeMo Boltz experiment with explicit result acceptance
+description: Validate captured NVIDIA responses, enforce candidate coverage and preserve
+  a reusable experiment through MCP.
+models:
+- alias: source
+  path: models/source
+  parameters:
+    task:
+      schema: biosimulant.bionemo-boltz-evidence/v1
+      target: UniProt:P62942
+      sequence: MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+      candidates:
+      - name: tacrolimus
+        cid: 445643
+        smiles: C[C@@H]1C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC(=O)[C@@H](/C=C(/C1)\C)CC=C)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC
+        request:
+          polymers:
+          - id: A
+            molecule_type: protein
+            sequence: MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+            msa:
+              benchmark_query:
+                a3m:
+                  alignment: '>P62942_query_only
+
+                    MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+
+                    '
+                  format: a3m
+                  rank: 0
+          ligands:
+          - id: B
+            smiles: C[C@@H]1C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC(=O)[C@@H](/C=C(/C1)\C)CC=C)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC
+            predict_affinity: true
+          recycling_steps: 3
+          sampling_steps: 200
+          diffusion_samples: 1
+          sampling_steps_affinity: 200
+          diffusion_samples_affinity: 3
+          step_scale: 1.5
+          output_format: mmcif
+          without_potentials: true
+          affinity_mw_correction: false
+      - name: sirolimus
+        cid: 5284616
+        smiles: C[C@@H]1CC[C@H]2C[C@@H](/C(=C/C=C/C=C/[C@H](C[C@H](C(=O)[C@@H]([C@@H](/C(=C/[C@H](C(=O)C[C@H](OC(=O)[C@@H]3CCCCN3C(=O)C(=O)[C@@]1(O2)O)[C@H](C)C[C@@H]4CC[C@H]([C@@H](C4)OC)O)C)/C)O)OC)C)C)/C)OC
+        request:
+          polymers:
+          - id: A
+            molecule_type: protein
+            sequence: MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+            msa:
+              benchmark_query:
+                a3m:
+                  alignment: '>P62942_query_only
+
+                    MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+
+                    '
+                  format: a3m
+                  rank: 0
+          ligands:
+          - id: B
+            smiles: C[C@@H]1CC[C@H]2C[C@@H](/C(=C/C=C/C=C/[C@H](C[C@H](C(=O)[C@@H]([C@@H](/C(=C/[C@H](C(=O)C[C@H](OC(=O)[C@@H]3CCCCN3C(=O)C(=O)[C@@]1(O2)O)[C@H](C)C[C@@H]4CC[C@H]([C@@H](C4)OC)O)C)/C)O)OC)C)C)/C)OC
+            predict_affinity: true
+          recycling_steps: 3
+          sampling_steps: 200
+          diffusion_samples: 1
+          sampling_steps_affinity: 200
+          diffusion_samples_affinity: 3
+          step_scale: 1.5
+          output_format: mmcif
+          without_potentials: true
+          affinity_mw_correction: false
+      - name: ascomycin
+        cid: 5282071
+        smiles: CC[C@@H]1/C=C(/C[C@@H](C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC1=O)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC)C)\C
+        request:
+          polymers:
+          - id: A
+            molecule_type: protein
+            sequence: MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+            msa:
+              benchmark_query:
+                a3m:
+                  alignment: '>P62942_query_only
+
+                    MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+
+                    '
+                  format: a3m
+                  rank: 0
+          ligands:
+          - id: B
+            smiles: CC[C@@H]1/C=C(/C[C@@H](C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC1=O)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC)C)\C
+            predict_affinity: true
+          recycling_steps: 3
+          sampling_steps: 200
+          diffusion_samples: 1
+          sampling_steps_affinity: 200
+          diffusion_samples_affinity: 3
+          step_scale: 1.5
+          output_format: mmcif
+          without_potentials: true
+          affinity_mw_correction: false
+      acceptance: Exact candidate coverage, request and response hashes, HTTP 200,
+        one structure, finite scores/confidence, bounded probability, exact protein
+        sequence, ligand heavy-element inventory.
+      limitations:
+      - Research predictions, not experimental binding or clinical evidence.
+      - Ligand heavy-element inventory does not establish connectivity, stereochemistry
+        or pose accuracy.
+      - NIM seed, checkpoint hash and hosting hardware are not exposed.
+      - Receipt hashes identify captured bytes; NVIDIA has not cryptographically signed
+        these responses.
+      - Query-only MSA supplies no evolutionary homologs.
+      - Native affinity score and provider affinity_pic50 remain separate fields.
+    records: []
+- alias: acceptance
+  path: models/acceptance
+  parameters: {}
+- alias: ranking
+  path: models/ranking
+  parameters: {}
+wiring:
+- from: source.provider_results
+  to:
+  - acceptance.provider_results
+- from: acceptance.acceptance
+  to:
+  - ranking.acceptance
+runtime:
+  python_version: '3.11'
+  duration: 0.01
+  communication_step: 0.01
+  settle_steps: 1
+io:
+  inputs: []
+  outputs:
+  - name: experiment_report
+    maps_to: ranking.report
+  - name: acceptance_passed
+    maps_to: ranking.accepted
+caveats:
+- Research predictions, not experimental binding or clinical evidence.
+- Ligand heavy-element inventory does not establish connectivity, stereochemistry
+  or pose accuracy.
+- NIM seed, checkpoint hash and hosting hardware are not exposed.
+- Receipt hashes identify captured bytes; NVIDIA has not cryptographically signed
+  these responses.
+- Query-only MSA supplies no evolutionary homologs.
+- Native affinity score and provider affinity_pic50 remain separate fields.
+- NVIDIA inference executes in the agent environment; this Lab validates recorded
+  responses. Structural gateway compatibility is not semantic scientific validation.
+  Acceptance is model-specific code in this Lab; no platform-wide release is claimed.

@@ -1,0 +1,44 @@
+schema_version: '2.0'
+package: benchmark-fkbp1a-prediction
+version: 0.1.0
+title: PredictionModel
+standard: other
+compatibility:
+  standard: biosimulant.model-compatibility
+  version: '0'
+biosim:
+  entrypoint: src.benchmark_modules:PredictionModel
+  communication_step: 0.01
+  execution_policy: once_before_run
+runtime:
+  python_version: '3.11'
+  dependencies:
+    packages:
+    - biosimulant==0.0.34
+    - boltz==2.0.2
+    - torch==2.6.0
+    - numpy==1.26.4
+    - rdkit==2025.3.3
+    - biopython==1.84
+    - pyyaml==6.0.2
+    - httpx==0.28.1
+  remote:
+    requirements:
+      accelerator: gpu
+      gpu_count: 1
+    init_kwargs:
+      cache_dir: ${REMOTE_EXECUTION_MOUNT_ROOT}/runtime-cache/boltz
+parameters:
+- name: command_timeout_s
+  value: 1800
+io:
+  inputs:
+  - name: candidates
+    signal_type: record
+    schema:
+      payload: json
+  outputs:
+  - name: predictions
+    signal_type: record
+    schema:
+      payload: json

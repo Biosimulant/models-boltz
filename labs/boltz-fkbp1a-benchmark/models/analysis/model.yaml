@@ -1,0 +1,38 @@
+schema_version: '2.0'
+package: benchmark-fkbp1a-analysis
+version: 0.1.0
+title: AnalysisModel
+standard: other
+compatibility:
+  standard: biosimulant.model-compatibility
+  version: '0'
+biosim:
+  entrypoint: src.benchmark_modules:AnalysisModel
+  communication_step: 0.01
+  execution_policy: once_before_run
+runtime:
+  python_version: '3.11'
+  dependencies:
+    packages:
+    - biosimulant==0.0.34
+    - boltz==2.0.2
+    - torch==2.6.0
+    - numpy==1.26.4
+    - rdkit==2025.3.3
+    - biopython==1.84
+    - pyyaml==6.0.2
+    - httpx==0.28.1
+parameters:
+- name: reference_sha256
+  value: 7e76aa0ca91a21f8fd3b0d2589b4906199917a5d69a4805309238362b1850cb6
+io:
+  inputs:
+  - name: predictions
+    signal_type: record
+    schema:
+      payload: json
+  outputs:
+  - name: report
+    signal_type: record
+    schema:
+      payload: json

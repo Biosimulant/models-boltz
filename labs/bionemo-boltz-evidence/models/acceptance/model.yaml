@@ -1,0 +1,29 @@
+schema_version: '2.0'
+package: bionemo-evidence-acceptance
+version: 0.1.0
+standard: other
+title: Acceptance
+biosim:
+  entrypoint: src.lab_modules:Acceptance
+  communication_step: 0.01
+  execution_policy: once_before_run
+runtime:
+  python_version: '3.11'
+  dependencies:
+    packages:
+    - biosimulant==0.0.34
+    - rdkit==2025.3.3
+    - biopython==1.84
+    - numpy==1.26.4
+parameters: []
+io:
+  inputs:
+  - name: provider_results
+    signal_type: record
+    schema:
+      payload: json
+  outputs:
+  - name: acceptance
+    signal_type: record
+    schema:
+      payload: json

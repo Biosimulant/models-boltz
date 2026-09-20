@@ -1,0 +1,103 @@
+schema_version: '2.0'
+package: boltz-fkbp1a-benchmark
+version: 0.1.0
+title: FKBP1A Boltz three-question benchmark
+description: "Finite molecular graph \u2192 structure/affinity prediction \u2192 geometric\
+  \ and statistical analysis."
+intended_use: Research-only execution and reproducibility benchmark; not measured
+  affinity, clinical validity or held-out accuracy.
+licenses:
+- Apache-2.0
+- CC-BY-4.0
+models:
+- path: models/candidates
+  alias: candidates
+  parameters:
+    bundle:
+      sequence: MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+      msa: '>P62942_query_only
+
+        MGVQVETISPGDGRTFPKRGQTCVVHYTGMLEDGKKFDSSRDRNKPFKFMLGKQEVIRGWEEGVAQMSVGQRAKLTISPDYAYGATGHPGIIPPHATLVFDVELLKLE
+
+        '
+      ligands:
+      - name: tacrolimus
+        cid: 445643
+        smiles: C[C@@H]1C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC(=O)[C@@H](/C=C(/C1)\C)CC=C)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC
+      - name: sirolimus
+        cid: 5284616
+        smiles: C[C@@H]1CC[C@H]2C[C@@H](/C(=C/C=C/C=C/[C@H](C[C@H](C(=O)[C@@H]([C@@H](/C(=C/[C@H](C(=O)C[C@H](OC(=O)[C@@H]3CCCCN3C(=O)C(=O)[C@@]1(O2)O)[C@H](C)C[C@@H]4CC[C@H]([C@@H](C4)OC)O)C)/C)O)OC)C)C)/C)OC
+      - name: ascomycin
+        cid: 5282071
+        smiles: CC[C@@H]1/C=C(/C[C@@H](C[C@@H]([C@@H]2[C@H](C[C@H]([C@@](O2)(C(=O)C(=O)N3CCCC[C@H]3C(=O)O[C@@H]([C@@H]([C@H](CC1=O)O)C)/C(=C/[C@@H]4CC[C@H]([C@@H](C4)OC)O)/C)O)C)OC)OC)C)\C
+      settings:
+        recycling_steps: 3
+        sampling_steps: 200
+        diffusion_samples: 1
+        sampling_steps_affinity: 200
+        diffusion_samples_affinity: 3
+    jobs:
+    - id: q1-tacrolimus-42
+      question: 1
+      ligand: tacrolimus
+      seed: 42
+    - id: q2-tacrolimus-42
+      question: 2
+      ligand: tacrolimus
+      seed: 42
+    - id: q2-sirolimus-42
+      question: 2
+      ligand: sirolimus
+      seed: 42
+    - id: q2-ascomycin-42
+      question: 2
+      ligand: ascomycin
+      seed: 42
+    - id: q3-tacrolimus-101
+      question: 3
+      ligand: tacrolimus
+      seed: 101
+    - id: q3-tacrolimus-202
+      question: 3
+      ligand: tacrolimus
+      seed: 202
+    - id: q3-tacrolimus-303
+      question: 3
+      ligand: tacrolimus
+      seed: 303
+    question: 1
+- path: models/prediction
+  alias: prediction
+  parameters:
+    command_timeout_s: 1800
+- path: models/analysis
+  alias: analysis
+  parameters:
+    reference_sha256: 7e76aa0ca91a21f8fd3b0d2589b4906199917a5d69a4805309238362b1850cb6
+wiring:
+- from: candidates.candidates
+  to:
+  - prediction.candidates
+- from: prediction.predictions
+  to:
+  - analysis.predictions
+runtime:
+  python_version: '3.11'
+  duration: 0.01
+  communication_step: 0.01
+  settle_steps: 1
+  gpu: true
+  compute_class: gpu
+io:
+  inputs: []
+  outputs:
+  - name: benchmark_report
+    maps_to: analysis.report
+  - name: raw_predictions
+    maps_to: prediction.predictions
+caveats:
+- Query-only MSA; no evolutionary alignment.
+- Affinity mixes biochemical training labels and is not measured Kd.
+- PDB 1FKJ predates training; retrospective consistency only.
+- Three repeats do not establish calibrated uncertainty.
+- Handwritten adapters require scientific review.
