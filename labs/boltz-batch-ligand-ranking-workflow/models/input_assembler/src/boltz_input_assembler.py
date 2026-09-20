@@ -42,7 +42,7 @@ def _coerce_string(value: Any, preferred_key: str) -> str | None:
 
 def _coerce_ligand_value(value: Any, preferred_key: str) -> str | None:
     text = _coerce_string(value, preferred_key)
-    if preferred_key == "csv" and text:
+    if preferred_key == "csv" and text and "\n" not in text and "," not in text:
         candidate_path = Path(text).expanduser()
         if candidate_path.is_file():
             return candidate_path.read_text(encoding="utf-8")
@@ -139,28 +139,69 @@ class BoltzInputAssemblerModel(BioModule):
             self.set_inputs(inputs)
         emitted_at = float(end if end is not None else self.integration_step)
         context = _coerce_mapping(self._inputs.get("scenario_context"))
-        protein_sequence = _coerce_string(self._inputs.get("protein_sequence"), "sequence") or self.default_protein_sequence or ""
+        protein_sequence = (
+            _coerce_string(self._inputs["protein_sequence"], "sequence") or ""
+            if "protein_sequence" in self._inputs else self.default_protein_sequence or ""
+        )
         ligand_name = "ligand_csv" if self.workflow_kind == "batch" else "ligand_smiles"
         ligand_key = "csv" if self.workflow_kind == "batch" else "smiles"
         ligand_value = (
-            _coerce_ligand_value(self._inputs.get(ligand_name), ligand_key)
-            or (self.default_ligand_csv if self.workflow_kind == "batch" else self.default_ligand_smiles)
-            or ""
+            _coerce_ligand_value(self._inputs[ligand_name], ligand_key) or ""
+            if ligand_name in self._inputs
+            else (self.default_ligand_csv if self.workflow_kind == "batch" else self.default_ligand_smiles) or ""
         )
-        msa_path = _coerce_string(self._inputs.get("msa_path"), "path") or self.default_msa_path or ""
+        msa_path = (
+            _coerce_string(self._inputs["msa_path"], "path") or ""
+            if "msa_path" in self._inputs else self.default_msa_path or ""
+        )
+        protein_changed = protein_sequence != (self.default_protein_sequence or "")
+        default_ligand = self.default_ligand_csv if self.workflow_kind == "batch" else self.default_ligand_smiles
+        ligand_changed = ligand_value.strip() != (default_ligand or "").strip()
+        changed = protein_changed or ligand_changed
+        supplied_options = _coerce_mapping(self._inputs.get("run_options"))
         run_options = dict(self.default_run_options)
-        run_options.update(_coerce_mapping(self._inputs.get("run_options")))
+        run_options.update(supplied_options)
         if context:
             run_options.setdefault("workflow_context", context.get("workflow_context"))
             run_options.setdefault("interpretation_scope", context.get("interpretation_scope"))
             run_options.setdefault("target_name", context.get("target_name"))
             run_options.setdefault("ligand_name", context.get("ligand_name"))
 
+        effective_context = dict(context)
+        effective_context["protein_sequence_length"] = len(protein_sequence)
+        if protein_changed:
+            for key in ("target_name", "target_family", "disease_area", "source_pdb"):
+                effective_context.pop(key, None)
+                run_options.pop(key, None)
+            effective_context["target_name"] = supplied_options.get("target_name") or "User-supplied protein"
+            run_options["target_name"] = effective_context["target_name"]
+        if ligand_changed:
+            for key in ("ligand_name", "ligand_role", "source_pubchem_cid", "ligand_examples"):
+                effective_context.pop(key, None)
+                run_options.pop(key, None)
+            effective_context["ligand_name"] = supplied_options.get("ligand_name") or "User-supplied ligand library"
+            run_options["ligand_name"] = effective_context["ligand_name"]
+        if changed:
+            effective_context["workflow_question"] = "How do the submitted ligands rank against the submitted protein under the selected scoring task?"
+            effective_context["workflow_context"] = "Boltz workflow with user-supplied scientific inputs"
+            effective_context["interpretation_scope"] = "Unvalidated user-supplied inputs; inspect molecular identity and model applicability before interpreting predictions"
+            for key in ("workflow_context", "interpretation_scope"):
+                run_options[key] = effective_context[key]
+        provenance = {
+            "protein_matches_packaged_example": not protein_changed,
+            "ligands_match_packaged_example": not ligand_changed,
+            "user_metadata_verified": False,
+        }
+        effective_context["input_provenance"] = provenance
+
         assembled = {
             "workflow_name": self.workflow_name,
             "workflow_kind": self.workflow_kind,
-            "target_name": context.get("target_name") or run_options.get("target_name"),
-            "ligand_name": context.get("ligand_name") or run_options.get("ligand_name"),
+            "target_name": effective_context.get("target_name") or run_options.get("target_name"),
+            "ligand_name": effective_context.get("ligand_name") or run_options.get("ligand_name"),
+            "effective_context": effective_context,
+            "input_provenance": provenance,
+            "user_supplied_source_metadata": {key: supplied_options[key] for key in ("source_pdb", "source_pubchem_cid") if key in supplied_options},
             "protein_sequence_length": len(protein_sequence),
             "protein_sequence_sha256": hashlib.sha256(protein_sequence.encode("utf-8")).hexdigest() if protein_sequence else "",
             "msa_path_supplied": bool(msa_path),

@@ -131,6 +131,21 @@ evaluated, completed and failed counts are reported. Blank SMILES or more than
 `max_ligands` (default 3) reject the request before computation; no rows are silently
 omitted. Pose review reminders use no uncalibrated binding/confidence thresholds.
 
+Runtime setup, prediction and retry subprocesses share a 1,500-second batch
+budget, leaving time within the managed 1,800-second limit to report results.
+The budget starts at the batch stage; environment startup and platform scheduling
+are outside this model's control. Remaining ligands are marked `not_started` when
+the budget expires and receive no score or rank. `evaluated_count` counts started
+ligands; `failed_count` includes every noncompleted row and `not_started_count`
+identifies those never attempted. These are partial comparisons, not full-library
+rankings. A cold runtime or slow external MSA service may consume the budget.
+
+The assembled request records hashes of the actual protein and ligand library.
+Changed inputs lose inherited example names and source claims. Reports use this
+resolved context; the separate context-stage output is explicitly the packaged
+example. User-supplied names and source metadata remain unverified. Explicitly
+blank inputs stay blank and fail validation rather than selecting the example.
+
 ## Safe Use Cases
 
 - Compare a small known ligand set against one target.

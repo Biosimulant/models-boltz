@@ -7,6 +7,7 @@ import io
 import json
 import math
 import tempfile
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -80,6 +81,7 @@ class Boltz2BatchLigandRanker(BioModule):
         runtime_setup_timeout_s: float = 1800.0,
         progress_heartbeat_s: float = 30.0,
         integration_step: float = 0.01,
+        execution_budget_s: float = 1500.0,
     ) -> None:
         self.integration_step = float(integration_step)
         self._protein_sequence = default_protein_sequence.strip() if isinstance(default_protein_sequence, str) and default_protein_sequence.strip() else None
@@ -87,6 +89,9 @@ class Boltz2BatchLigandRanker(BioModule):
         self._msa_path = default_msa_path.strip() if isinstance(default_msa_path, str) and default_msa_path.strip() else None
         self._run_options = _coerce_run_options(default_run_options)
         self.max_ligands = max(1, int(max_ligands))
+        if isinstance(execution_budget_s, bool) or not isinstance(execution_budget_s, (int, float)) or not math.isfinite(execution_budget_s) or not 0 < execution_budget_s <= 1500:
+            raise ValueError("execution_budget_s must be finite and in (0, 1500]")
+        self.execution_budget_s = float(execution_budget_s)
 
         self.runner_kwargs = {
             "boltz_executable": boltz_executable,
@@ -199,6 +204,8 @@ class Boltz2BatchLigandRanker(BioModule):
         rows: list[dict[str, Any]] = []
         per_ligand_metadata: list[dict[str, Any]] = []
         top_payload: dict[str, Any] | None = None
+        deadline = time.monotonic() + self.execution_budget_s
+        evaluated_count = 0
 
         for index, ligand in enumerate(ligands, start=1):
             name = ligand["name"]
@@ -211,26 +218,34 @@ class Boltz2BatchLigandRanker(BioModule):
                     "workflow_context": "Guided Boltz-2 batch ligand ranking workflow",
                 }
             )
-            runner = Boltz2AffinityPredictor(
-                default_protein_sequence=self._protein_sequence,
-                default_ligand_smiles=ligand["smiles"],
-                default_msa_path=self._msa_path,
-                default_run_options=ligand_options,
-                work_dir=str(ligand_run_dir),
-                **self.runner_kwargs,
-            )
-            outputs = runner.execute(
-                {},
-                context=ExecutionContext(
-                    policy=ExecutionPolicy.ONCE_BEFORE_RUN,
-                    run_start=0.0,
-                    run_end=1.0,
-                ),
-            )
+            started = time.monotonic() < deadline
+            if not started:
+                outputs = {}
+            else:
+                evaluated_count += 1
+                runner = Boltz2AffinityPredictor(
+                    default_protein_sequence=self._protein_sequence,
+                    default_ligand_smiles=ligand["smiles"],
+                    default_msa_path=self._msa_path,
+                    default_run_options=ligand_options,
+                    work_dir=str(ligand_run_dir),
+                    execution_deadline=deadline,
+                    **self.runner_kwargs,
+                )
+                outputs = runner.execute(
+                    {},
+                    context=ExecutionContext(
+                        policy=ExecutionPolicy.ONCE_BEFORE_RUN,
+                        run_start=0.0,
+                        run_end=1.0,
+                    ),
+                )
             affinity = self._payload(outputs.get("affinity_summary"))
             confidence = self._payload(outputs.get("confidence_summary"))
             artifacts = self._payload(outputs.get("structure_artifacts"))
             metadata = self._payload(outputs.get("run_metadata"))
+            if not started:
+                metadata = {"status": "not_started", "error": "batch execution budget exhausted before this ligand could start"}
             status = metadata.get("status") if isinstance(metadata, Mapping) else "error"
 
             row = self._build_row(index, ligand, status, affinity, confidence, metadata)
@@ -271,7 +286,9 @@ class Boltz2BatchLigandRanker(BioModule):
             "top_ligand_name": top_payload["ligand"]["name"] if top_payload else None,
             "ligand_count": len(ligands),
             "submitted_count": len(ligands),
-            "evaluated_count": len(rows),
+            "evaluated_count": evaluated_count,
+            "not_started_count": len(ligands) - evaluated_count,
+            "execution_budget_s": self.execution_budget_s,
             "completed_count": completed_count,
             "failed_count": len(rows) - completed_count,
             "ranked_ligands": ranked_rows,
@@ -300,7 +317,9 @@ class Boltz2BatchLigandRanker(BioModule):
                 "batch_status": batch_status,
                 "ligand_count": len(ligands),
                 "submitted_count": len(ligands),
-                "evaluated_count": len(rows),
+                "evaluated_count": evaluated_count,
+                "not_started_count": len(ligands) - evaluated_count,
+                "execution_budget_s": self.execution_budget_s,
                 "completed_count": sum(1 for row in rows if row["status"] == "completed"),
                 "failed_count": sum(1 for row in rows if row["status"] != "completed"),
                 "top_ligand_name": top_name,

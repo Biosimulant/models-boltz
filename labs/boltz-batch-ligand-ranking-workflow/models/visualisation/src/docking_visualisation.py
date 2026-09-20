@@ -113,6 +113,8 @@ class DockingVisualisationModel(BioModule):
         visuals: list[dict[str, Any]] = []
         context = self._stage_value(self.context_alias, "scenario_context")
         assembled = self._stage_value(self.assembler_alias, "assembled_boltz_request")
+        if isinstance(assembled, Mapping) and isinstance(assembled.get("effective_context"), Mapping):
+            context = assembled["effective_context"]
         evidence = self._stage_value(self.interpreter_alias, "prediction_evidence")
         if isinstance(evidence, Mapping):
             rows = [
@@ -145,7 +147,7 @@ class DockingVisualisationModel(BioModule):
                 visuals.append(
                     {
                         "render": "table",
-                        "description": "Source-backed target, ligand, and use-case context for this workflow.",
+                        "description": "Resolved input context; user-supplied molecular identities and source metadata are unverified.",
                         "data": {"title": "Workflow target and ligand context", "columns": ["Field", "Value"], "rows": rows},
                     }
                 )

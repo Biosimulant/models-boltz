@@ -106,6 +106,7 @@ class Boltz2AffinityPredictor(BioModule):
         runtime_setup_timeout_s: float = 1800.0,
         progress_heartbeat_s: float = 30.0,
         integration_step: float = 0.01,
+        execution_deadline: Optional[float] = None,
     ) -> None:
         self.integration_step = float(integration_step)
         self.boltz_executable = boltz_executable
@@ -125,6 +126,7 @@ class Boltz2AffinityPredictor(BioModule):
         self.override = override
         self.command_timeout_s = command_timeout_s
         self.runtime_setup_timeout_s = runtime_setup_timeout_s
+        self.execution_deadline = execution_deadline
         self.progress_heartbeat_s = max(0.0, float(progress_heartbeat_s))
 
         repo_root = Path(__file__).resolve().parents[3]
@@ -648,7 +650,7 @@ class Boltz2AffinityPredictor(BioModule):
             cwd=python_executable.parent,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=self._remaining_timeout(30),
             check=False,
         )
         if completed.returncode != 0:
@@ -708,7 +710,7 @@ class Boltz2AffinityPredictor(BioModule):
                     cwd=cwd,
                     capture_output=True,
                     text=True,
-                    timeout=timeout,
+                    timeout=self._remaining_timeout(timeout),
                     check=False,
                 )
             except BaseException as exc:  # noqa: BLE001
@@ -743,6 +745,15 @@ class Boltz2AffinityPredictor(BioModule):
         else:
             self._emit_progress(phase, f"{completion_message} (exit code {completed.returncode})")
         return completed
+
+    def _remaining_timeout(self, requested: float) -> float:
+        """All setup, prediction and retry commands share the batch's deadline."""
+        if self.execution_deadline is None:
+            return requested
+        remaining = self.execution_deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("batch execution budget exhausted")
+        return min(requested, remaining)
 
     def _venv_path(self, runtime_root: Path, executable: str) -> Path:
         bin_dir = "Scripts" if os.name == "nt" else "bin"

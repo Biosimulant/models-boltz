@@ -74,6 +74,7 @@ models:
     sampling_steps: 200
     diffusion_samples: 1
     max_ligands: 3
+    execution_budget_s: 1500
 - alias: ranking_interpreter
   path: models/interpreter
   parameters:
@@ -192,9 +193,9 @@ io:
       rows: 6
   outputs:
   - name: scenario_context
-    label: Workflow Scenario Context
-    description: Source-backed target, ligand, use-case, provenance, and caveat context
-      for this Boltz workflow.
+    label: Packaged Example Context
+    description: Context for the default example. For overridden inputs, use the effective
+      context and provenance in the assembled request.
     maps_to: batch_target_context.scenario_context
   - name: assembled_boltz_request
     label: Assembled Boltz Request

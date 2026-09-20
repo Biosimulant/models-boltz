@@ -98,6 +98,8 @@ class BoltzPredictionInterpreterModel(BioModule):
         emitted_at = float(end if end is not None else self.integration_step)
         context = _coerce_mapping(self._inputs.get("scenario_context"))
         assembled = _coerce_mapping(self._inputs.get("assembled_boltz_request"))
+        if isinstance(assembled.get("effective_context"), Mapping):
+            context = dict(assembled["effective_context"])
         affinity = _coerce_mapping(self._inputs.get(f"{self.core_alias}_affinity_summary"))
         confidence = _coerce_mapping(self._inputs.get(f"{self.core_alias}_confidence_summary"))
         artifacts = _coerce_mapping(self._inputs.get(f"{self.core_alias}_structure_artifacts"))
@@ -122,13 +124,14 @@ class BoltzPredictionInterpreterModel(BioModule):
                 "has_affinity_file": bool(artifacts.get("affinity_file")),
             },
             "request_summary": assembled,
+            "input_provenance": assembled.get("input_provenance"),
             "dominant_module": self.core_alias,
             "caveat": context.get("caveat") or self.caveat,
         }
         if self.mode == "batch":
             evidence["ranked_ligand_count"] = batch.get("completed_count", 0)
             evidence["top_ligand"] = batch.get("top_ligand_name") or metrics.get("top_ligand")
-            evidence["batch_counts"] = {key: batch.get(key) for key in ("submitted_count", "evaluated_count", "completed_count", "failed_count")}
+            evidence["batch_counts"] = {key: batch.get(key) for key in ("submitted_count", "evaluated_count", "completed_count", "failed_count", "not_started_count")}
             evidence["ranking_basis"] = batch.get("ranking_basis")
 
         source = getattr(self, "_world_name", self.__class__.__name__)
