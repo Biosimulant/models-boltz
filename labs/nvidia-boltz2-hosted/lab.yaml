@@ -1,0 +1,65 @@
+schema_version: "2.0"
+package: nvidia-boltz2-hosted
+version: "0.1.0"
+title: NVIDIA-hosted Boltz-2
+description: One Boltz-2 Lab invoking NVIDIA inference with explicit molecular inputs and native result provenance. Qualification pending.
+models:
+  - alias: main
+    path: owned/models/main
+    parameters:
+      observation_timeout_s: 1200.0
+      max_response_bytes: 20000000
+runtime:
+  python_version: "3.10"
+  duration: 1.0
+  communication_step: 1.0
+  initial_inputs: {}
+wiring: []
+io:
+  inputs:
+    - name: molecular_system
+      label: Molecular system
+      maps_to: main.molecular_system
+      value_type: record
+      format: json
+      required: true
+      description: Polymers, ligands and constraints with explicit unique entity IDs. No scientific default.
+    - name: run_options
+      label: Inference controls
+      maps_to: main.run_options
+      value_type: record
+      format: json
+      required: false
+      default: {parameters: {}}
+      description: Object with parameters containing declared native controls. Credentials are server-side only.
+  outputs:
+    - name: predicted_complexes
+      maps_to: main.predicted_complexes
+      label: Predicted complexes
+      description: Every returned mmCIF sample with content, checksum and identity.
+    - name: affinity_predictions
+      maps_to: main.affinity_predictions
+      label: Native affinity predictions
+      description: Native values preserved separately by ligand; no unverified score conversion.
+    - name: quality_metrics
+      maps_to: main.quality_metrics
+      label: Native structure quality
+      description: Model scores with field-specific units, not measured accuracy.
+    - name: run_provenance
+      maps_to: main.run_provenance
+      label: Run provenance
+      description: Input and output digests, provider request ID and identity limitations.
+    - name: native_response
+      maps_to: main.native_response
+      label: Original provider response
+      description: Exact decoded JSON response for independently verifiable capture.
+intended_use:
+  statement: Research biomolecular structure and native affinity prediction through NVIDIA-hosted Boltz-2. Scientific qualification pending.
+caveats:
+  - Hosted checkpoint, container, seed and GPU identity are not exposed by the observed response.
+  - Hub secret availability and managed runtime are unverified until actual managed execution.
+  - Confidence is not observed accuracy. Benchmark thresholds and full ligand stereo/graph checks remain open.
+prohibited_claims:
+  - Clinical, diagnostic, therapeutic efficacy or regulated claims.
+  - Measured affinity, universal accuracy or exact self-hosted checkpoint equivalence.
+  - Captured-response replay represented as fresh inference.

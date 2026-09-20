@@ -1,0 +1,86 @@
+schema_version: "2.0"
+package: nvidia-boltz2-hosted-core
+version: "0.1.0"
+title: NVIDIA-hosted Boltz-2
+description: Fresh hosted biomolecular prediction with preserved native outputs and provenance.
+standard: other
+biosim:
+  entrypoint: model:NvidiaBoltz2
+  communication_step: 1.0
+  execution_policy: once_before_run
+runtime:
+  python_version: "3.10"
+  dependencies:
+    packages:
+      - biosimulant==0.0.34
+      - httpx==0.28.1
+      - biopython==1.84
+      - pyyaml==6.0.2
+      - pytest==8.3.5
+parameters:
+  - name: observation_timeout_s
+    value: 1200.0
+    description: Client observation limit in seconds. Expiry does not cancel provider compute.
+  - name: max_response_bytes
+    value: 20000000
+    description: Maximum decoded response bytes accepted by the client.
+  - name: resume_request_id
+    value: null
+    description: Existing provider UUID to poll instead of submitting a new request.
+  - name: resume_request_sha256
+    value: null
+    description: Original canonical request digest required with a resume UUID; rejects changed inputs.
+io:
+  inputs:
+    - name: molecular_system
+      signal_type: record
+      schema: {polymers: json, ligands: json, constraints: json}
+      accepted_units: ["1"]
+      required: true
+      description: Declared molecular entities, MSA, modifications and constraints using native schemas and explicit IDs.
+    - name: run_options
+      signal_type: record
+      schema: {parameters: json}
+      accepted_units: ["1"]
+      required: false
+      default: {parameters: {}}
+      description: Native controls from the explicit allowlist. Omitted settings remain provider defaults.
+  outputs:
+    - name: predicted_complexes
+      signal_type: record
+      schema: {items: json, coordinate_unit: str, request_sha256: str}
+      emitted_unit: "1"
+      description: All samples as inline mmCIF with byte counts, checksums and chain IDs. Coordinates use angstrom.
+    - name: affinity_predictions
+      signal_type: record
+      schema: {by_ligand: json, field_definitions: json, request_sha256: str}
+      emitted_unit: "1"
+      description: Unconverted native fields keyed by ligand ID. Mixed record with field-specific definitions.
+    - name: quality_metrics
+      signal_type: record
+      schema: {values: json, field_units: json, request_sha256: str}
+      emitted_unit: "1"
+      description: Native quality values and field units. PDE uses angstrom; confidence is not measured accuracy.
+    - name: run_provenance
+      signal_type: record
+      schema:
+        request: json
+        request_sha256: str
+        response_sha256: str
+        response_bytes: int
+        provider_request_id: str
+        endpoint: str
+        captured_at: str
+        wall_seconds: float
+        resumed: bool
+        provider_headers: json
+        backend_identity: json
+        limitations: json
+      emitted_unit: "1"
+      description: Exact input and result digests with provider observation and explicit backend identity gaps.
+    - name: native_response
+      signal_type: scalar
+      dtype: str
+      format: json
+      emitted_unit: "1"
+      description: Original decoded UTF-8 JSON for independently checksummed portable capture.
