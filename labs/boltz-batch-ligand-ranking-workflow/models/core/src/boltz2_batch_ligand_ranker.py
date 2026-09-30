@@ -257,6 +257,12 @@ class Boltz2BatchLigandRanker(BioModule):
                     "ligand": name,
                     "status": status,
                     "error": row["error"],
+                    "diagnostics": {
+                        key: value[-8192:] if isinstance(value, str) else value
+                        for key in ("returncode", "stdout", "stderr", "runtime_mode", "use_msa_server", "retry_count")
+                        if isinstance(metadata, Mapping)
+                        and isinstance(value := metadata.get(key), (str, int, bool))
+                    },
                 }
             )
             if status == "completed":

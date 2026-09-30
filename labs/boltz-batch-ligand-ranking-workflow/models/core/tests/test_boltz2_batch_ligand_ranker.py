@@ -97,7 +97,7 @@ def test_batch_preserves_failures_selects_completed_top_and_interprets_partial(m
             self.name = kwargs["default_run_options"]["batch_ligand_name"]
         def execute(self, inputs, *, context):
             payloads = {
-                "run_metadata": {"status": "error" if all_failed or self.name == "Failed" else "completed", "error": "fixture failure"},
+                "run_metadata": {"status": "error" if all_failed or self.name == "Failed" else "completed", "error": "fixture failure", "returncode": 1, "stdout": "setup " + "x" * 9000, "stderr": "fixture prediction traceback", "use_msa_server": True},
                 "affinity_summary": {"affinity_pred_value": -9. if self.name == "Failed" else -2. if self.name == "Strong" else -1., "affinity_probability_binary": .8},
                 "confidence_summary": {"confidence_score": .9},
                 "structure_artifacts": {"structure_file": str(tmp_path / (self.name + ".cif"))},
@@ -115,6 +115,10 @@ def test_batch_preserves_failures_selects_completed_top_and_interprets_partial(m
     assert batch["failed_count"] == (3 if all_failed else 1)
     assert len(batch["ranked_ligands"]) == 3
     assert batch["top_ligand_name"] == (None if all_failed else "Strong")
+    assert metadata["ligand_runs"][0]["diagnostics"] == {
+        "returncode": 1, "stdout": "x" * 8192,
+        "stderr": "fixture prediction traceback", "use_msa_server": True,
+    }
     if not all_failed:
         assert unwrap_payload(outputs["structure_artifacts"])["structure_file"].endswith("Strong.cif")
     interpreter_path = path.parents[2] / "interpreter/src/boltz_prediction_interpreter.py"
