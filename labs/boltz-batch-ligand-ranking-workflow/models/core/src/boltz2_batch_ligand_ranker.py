@@ -20,6 +20,16 @@ from biosim.signals import unwrap_payload as _signal_value
 from src.boltz2_affinity_predictor import Boltz2AffinityPredictor
 
 
+def _bounded_diagnostic(value: Any) -> Any:
+    """Keep early compiler errors and the final traceback within 8192 characters."""
+    if not isinstance(value, str) or len(value) <= 8192:
+        return value
+    marker = "\n... [diagnostic middle omitted] ...\n"
+    head = (8192 - len(marker)) // 2
+    tail = 8192 - len(marker) - head
+    return value[:head] + marker + value[-tail:]
+
+
 def _generic_input_spec(description: str | None = None) -> SignalSpec:
     return SignalSpec.record(
         schema={"payload": "json"},
@@ -258,7 +268,7 @@ class Boltz2BatchLigandRanker(BioModule):
                     "status": status,
                     "error": row["error"],
                     "diagnostics": {
-                        key: value[-8192:] if isinstance(value, str) else value
+                        key: _bounded_diagnostic(value)
                         for key in ("returncode", "stdout", "stderr", "runtime_mode", "use_msa_server", "retry_count")
                         if isinstance(metadata, Mapping)
                         and isinstance(value := metadata.get(key), (str, int, bool))

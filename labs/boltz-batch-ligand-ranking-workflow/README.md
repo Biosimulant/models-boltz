@@ -106,6 +106,11 @@ The known example mode works because `lab.yaml` defines the target and ligand CS
 - `confidence_summary`: model confidence outputs for the top-ranked completed ligand.
 - `run_metadata`: batch execution metadata, per-ligand statuses, output paths, captured logs, and status.
 
+Per-ligand stdout and stderr retain up to 8192 characters each. Longer logs
+preserve their beginning and end with an explicit omission marker, so an early
+compiler error survives alongside the final traceback. These diagnostics do not
+turn failed predictions into scientific results.
+
 The visualisation model turns these records into standard Biosimulant run visuals, including a top-ranked structure viewer and a batch ranking table.
 
 ## Ranking Semantics
