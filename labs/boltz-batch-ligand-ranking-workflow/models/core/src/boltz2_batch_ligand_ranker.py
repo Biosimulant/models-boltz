@@ -267,6 +267,7 @@ class Boltz2BatchLigandRanker(BioModule):
                     "ligand": name,
                     "status": status,
                     "error": row["error"],
+                    "execution_provenance": metadata.get("execution_provenance") if isinstance(metadata, Mapping) else None,
                     "diagnostics": {
                         key: _bounded_diagnostic(value)
                         for key in ("returncode", "stdout", "stderr", "runtime_mode", "use_msa_server", "retry_count")
@@ -325,6 +326,10 @@ class Boltz2BatchLigandRanker(BioModule):
         top_confidence = dict(top_payload["confidence_summary"])
         top_confidence["top_ligand_name"] = top_name
         top_artifacts = dict(top_payload["structure_artifacts"])
+        for item in per_ligand_metadata:
+            provenance = item.get("execution_provenance")
+            if isinstance(provenance, Mapping) and provenance.get("alignment_archive_file"):
+                top_artifacts[f"ligand_{item['rank_input_order']}_alignment_archive_file"] = provenance["alignment_archive_file"]
         top_metadata = dict(top_payload["run_metadata"])
         top_metadata.update(
             {

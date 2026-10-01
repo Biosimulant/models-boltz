@@ -15,6 +15,7 @@ import tarfile
 import hashlib
 import threading
 import time
+import zipfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -307,6 +308,11 @@ class Boltz2AffinityPredictor(BioModule):
             if maybe_path is not None:
                 artifacts[key] = str(Path(maybe_path))
 
+        provenance = self._collect_execution_provenance(run_root, output_dir, resolved)
+        metadata["execution_provenance"] = provenance
+        if provenance.get("alignment_archive_file"):
+            artifacts["alignment_archive_file"] = provenance["alignment_archive_file"]
+
         metadata["status"] = "completed"
         metadata["prediction_dir_name"] = prediction_dir.name
         self._output_payloads = {
@@ -320,6 +326,105 @@ class Boltz2AffinityPredictor(BioModule):
 
     def visualize(self) -> Optional[list[dict[str, Any]]]:
         return None
+
+    def _collect_execution_provenance(
+        self, run_root: Path, output_dir: Path, resolved: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Record observed runtime/weights and retain exact raw and processed MSAs.
+
+        Missing evidence is explicit and never changes an inference result into
+        a qualified result. Hashes identify observed bytes, not upstream trust.
+        """
+        evidence: dict[str, Any] = {
+            "status": "incomplete", "gaps": [], "weights": [],
+            "alignment_files": [],
+            "limitation": "Observed file hashes and runtime inventory do not establish upstream authenticity, deterministic reruns or experimental accuracy.",
+        }
+        gaps = evidence["gaps"]
+
+        def fingerprint(path: Path) -> dict[str, Any]:
+            digest = hashlib.sha256()
+            size = 0
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    self._remaining_timeout(self.command_timeout_s)
+                    size += len(chunk)
+                    digest.update(chunk)
+            if not size:
+                raise ValueError(f"empty provenance file: {path.name}")
+            return {"file_name": path.name, "size_bytes": size, "sha256": digest.hexdigest()}
+
+        try:
+            if str(resolved["runtime_mode"]).lower() != "managed":
+                raise ValueError("external executable interpreter cannot be inferred reliably")
+            python = self._venv_path(self.runtime_dir, "python")
+            probe = (
+                "import json,sys,platform,importlib.metadata as m; import torch; "
+                "print(json.dumps({'python_version':sys.version,'python_executable':sys.executable,"
+                "'platform':platform.platform(),'packages':sorted([{'name':d.metadata['Name'],'version':d.version} "
+                "for d in m.distributions()],key=lambda d:(d['name'].lower(),d['version'])),"
+                "'torch_version':torch.__version__,'cuda_version':torch.version.cuda,"
+                "'cuda_available':torch.cuda.is_available(),'gpu_names':[torch.cuda.get_device_name(i) "
+                "for i in range(torch.cuda.device_count())]}))"
+            )
+            result = subprocess.run(
+                [str(python), "-c", probe], cwd=str(run_root), capture_output=True,
+                text=True, timeout=self._remaining_timeout(60), check=True,
+            )
+            environment = json.loads(result.stdout)
+            if not isinstance(environment, dict) or not environment.get("packages"):
+                raise ValueError("executed environment inventory is empty")
+            evidence["environment"] = environment
+        except Exception as exc:  # noqa: BLE001
+            gaps.append(f"executed environment inventory unavailable: {exc}")
+
+        for name in ("boltz2_conf.ckpt", "boltz2_aff.ckpt"):
+            try:
+                evidence["weights"].append(fingerprint(self.cache_dir / name))
+            except Exception as exc:  # noqa: BLE001
+                gaps.append(f"weight fingerprint unavailable for {name}: {exc}")
+
+        try:
+            roots = [output_dir, output_dir / "boltz_results_request"]
+            matching = [root for root in roots if (root / "processed" / "msa").is_dir()]
+            if len(matching) != 1:
+                raise ValueError("expected one Boltz processed-input directory")
+            root = matching[0]
+            raw = sorted(p for p in (root / "msa").glob("*") if p.suffix in {".a3m", ".csv"})
+            if self._msa_path and not raw:
+                supplied = Path(self._msa_path)
+                if supplied.is_file():
+                    raw = [supplied]
+            processed = sorted((root / "processed" / "msa").glob("*.npz"))
+            if not raw or not processed:
+                raise ValueError("raw or processed alignment bytes are missing")
+            archive_path = run_root / "alignment-evidence.zip"
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for role, paths in (("raw", raw), ("processed", processed)):
+                    for index, path in enumerate(paths):
+                        item = fingerprint(path)
+                        item["archive_member"] = f"{role}/{index:03d}-{path.name}"
+                        item["role"] = role
+                        archive.write(path, item["archive_member"])
+                        # Verify the archived bytes, not just the original path.
+                        with archive.open(item["archive_member"]) as handle:
+                            archived_digest = hashlib.file_digest(handle, "sha256").hexdigest()
+                        if archived_digest != item["sha256"]:
+                            raise ValueError("alignment changed while being archived")
+                        evidence["alignment_files"].append(item)
+                request_bytes = (run_root / "request.yaml").read_bytes()
+                evidence["request_sha256"] = hashlib.sha256(request_bytes).hexdigest()
+                archive.writestr("request.yaml", request_bytes)
+                archive.writestr("alignment-manifest.json", json.dumps(evidence["alignment_files"], sort_keys=True, indent=2))
+            if archive_path.stat().st_size > 64 * 1024 * 1024:
+                raise ValueError("alignment archive exceeds the default durable artifact limit")
+            evidence["alignment_archive"] = fingerprint(archive_path)
+            evidence["alignment_archive_file"] = str(archive_path)
+        except Exception as exc:  # noqa: BLE001
+            gaps.append(f"durable alignment evidence unavailable: {exc}")
+        if not gaps:
+            evidence["status"] = "complete"
+        return evidence
 
     def _resolved_options(self) -> Dict[str, Any]:
         resolved: Dict[str, Any] = {
